@@ -7,7 +7,7 @@
 #include <Shlwapi.h>
 #define BUFFER_MAX_CCH 0xFFFF
 #include <Strsafe.h>
-
+#include <comdef.h>
 #include <memory>
 #include <utility>
 using namespace std;
