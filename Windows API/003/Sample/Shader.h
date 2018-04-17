@@ -55,14 +55,14 @@ public:
 
 private:
 	
-	void OutputShaderErrorMessage(ID3D10Blob* message) {
+	void OutputShaderErrorMessage(ID3D10Blob* message, HWND hWnd) {
 		size_t size = message->GetBufferSize();
 		const char* msg = (char*)(message->GetBufferPointer());
 
 		char* output = new char[size + 1];
 		strncpy_s(output, size + 1, msg, size);
 		output[size] = NULL;
-		MessageBoxA(DirectX::hWnd, output, "", 0);
+		MessageBoxA(hWnd, output, "", 0);
 		delete output;
 	}
 

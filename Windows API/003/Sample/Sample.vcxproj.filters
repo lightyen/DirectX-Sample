@@ -47,9 +47,6 @@
     <ClCompile Include="Sample.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
-    <ClCompile Include="DirectXEnvironment.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
     <ClCompile Include="Exception.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
