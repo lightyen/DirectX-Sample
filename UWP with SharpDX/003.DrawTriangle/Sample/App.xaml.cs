@@ -39,6 +39,9 @@ namespace Sample
         /// <param name="e">關於啟動要求和處理序的詳細資料。</param>
         protected override void OnLaunched(LaunchActivatedEventArgs e)
         {
+#if DEBUG
+            this.DebugSettings.EnableFrameRateCounter = true;
+#endif
             Frame rootFrame = Window.Current.Content as Frame;
 
             // 當視窗中已有內容時，不重複應用程式初始化，

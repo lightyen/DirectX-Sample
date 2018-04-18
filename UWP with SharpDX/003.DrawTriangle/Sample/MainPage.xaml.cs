@@ -18,11 +18,6 @@ namespace Sample
     public sealed partial class MainPage : Page {
         public MainPage() {
             this.InitializeComponent();
-            Window.Current.CoreWindow.KeyDown += CoreWindow_KeyDown;
-        }
-
-        private void CoreWindow_KeyDown(Windows.UI.Core.CoreWindow sender, Windows.UI.Core.KeyEventArgs args) {
-            this.AppSwapChainPanel.Render();
         }
     }
 }

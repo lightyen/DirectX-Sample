@@ -96,14 +96,16 @@ namespace DirectX {
 				GetClientRect(hWnd, &rect);
 				DXGI_SWAP_CHAIN_DESC1 sd;
 				ZeroMemory(&sd, sizeof(DXGI_SWAP_CHAIN_DESC1));
-				sd.Width = rect.right - rect.left;
-				sd.Height = rect.bottom - rect.top;
-				sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+				sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+				sd.BufferCount = 2;
+				sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 				sd.SampleDesc.Count = 1;
 				sd.SampleDesc.Quality = 0;
-				sd.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
-				sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
-				sd.BufferCount = 2;
+				sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+				sd.Width = rect.right - rect.left;
+				sd.Height = rect.bottom - rect.top;
+				sd.Scaling = DXGI_SCALING_STRETCH;
+				sd.Stereo = false;
 
 				// 記一下
 				hWnd = hwnd;
@@ -126,7 +128,7 @@ namespace DirectX {
 				CHECKRETURN(hr, TEXT("CreateRenderTargetView"));
 				// 放手
 				BackBuffer.Reset();
-				// 注意這裡是GetAddressOf,而不是ReleaseAndGetAddressOf
+				
 				ImmediateContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
 			}
 		}
@@ -156,13 +158,13 @@ namespace DirectX {
 
 				D3D11_INPUT_ELEMENT_DESC layout[] =
 				{
-					{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+					{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+					{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 16, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 				};
 
 				// Create the input layout
 				hr = D3D11Device->CreateInputLayout(layout, ARRAYSIZE(layout), vertexShaderCode.Code,
 					vertexShaderCode.Length, &VertexLayout);
-
 				CHECKRETURN(hr, TEXT("Create VertexLayout"));
 
 				// Set the input layout
@@ -172,6 +174,9 @@ namespace DirectX {
 				pixelShaderCode.LoadFromFile(TEXT("PixelShader.cso"));
 				hr = D3D11Device->CreatePixelShader(pixelShaderCode.Code, pixelShaderCode.Length, nullptr, &PixelShader);
 				CHECKRETURN(hr, TEXT("CreatePixelShader"));
+
+				ImmediateContext->VSSetShader(VertexShader.Get(), nullptr, 0);
+				ImmediateContext->PSSetShader(PixelShader.Get(), nullptr, 0);
 			}
 		}
 
@@ -181,21 +186,21 @@ namespace DirectX {
 				HRESULT hr;
 				SimpleVertex vertices[] =
 				{
-					XMFLOAT3(0.0f, 0.5f, 0.5f),
-					XMFLOAT3(0.5f, -0.5f, 0.5f),
-					XMFLOAT3(-0.5f, -0.5f, 0.5f),
+					XMFLOAT4(0.0f, 0.5f, 0.5f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f),
+					XMFLOAT4(0.5f, -0.5f, 0.5f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f),
+					XMFLOAT4(-0.5f, -0.5f, 0.5f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f),
 				};
 
 				D3D11_BUFFER_DESC bd;
 				ZeroMemory(&bd, sizeof(bd));
-				bd.Usage = D3D11_USAGE_DEFAULT;
-				bd.ByteWidth = sizeof(SimpleVertex) * 3;
+				//bd.Usage = D3D11_USAGE_DEFAULT;
+				bd.ByteWidth = sizeof(SimpleVertex) * ARRAYSIZE(vertices);
 				bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-				bd.CPUAccessFlags = 0;
-				D3D11_SUBRESOURCE_DATA InitData;
-				ZeroMemory(&InitData, sizeof(InitData));
-				InitData.pSysMem = vertices;
-				hr = D3D11Device->CreateBuffer(&bd, &InitData, &VertexBuffer);
+				//bd.CPUAccessFlags = 0;
+				D3D11_SUBRESOURCE_DATA srd;
+				ZeroMemory(&srd, sizeof(srd));
+				srd.pSysMem = vertices;
+				hr = D3D11Device->CreateBuffer(&bd, &srd, &VertexBuffer);
 				CHECKRETURN(hr, TEXT("Create VertexBuffer"));
 
 				// Set vertex buffer
@@ -206,14 +211,14 @@ namespace DirectX {
 
 				// Set primitive topology
 				ImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-				ImmediateContext->VSSetShader(VertexShader.Get(), nullptr, 0);
-				ImmediateContext->PSSetShader(PixelShader.Get(), nullptr, 0);
 			}
 		}
 
 		void Render() {
 			if (ImmediateContext != nullptr) {
+				// 注意這裡是GetAddressOf,而不是ReleaseAndGetAddressOf
+				ImmediateContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
+
 				// Clear Screen to Teal.
 				ImmediateContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::Teal);
 
@@ -222,7 +227,6 @@ namespace DirectX {
 
 				SwapChain->Present(1, 0);
 			}
-			
 		}
 
 		ComPtr<IDXGIAdapter> GetPreferenceAdapter(IDXGIFactory* DXGIFactory) {

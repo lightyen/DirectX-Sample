@@ -3,6 +3,7 @@
 
 namespace DirectX {
 	struct SimpleVertex {
-		XMFLOAT3 Position;
+		XMFLOAT4 Position;
+		XMFLOAT4 Color;
 	};
 }
