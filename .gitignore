@@ -5,6 +5,7 @@
 
 # User-specific files
 *.suo
+*.cso
 *.user
 *.userosscache
 *.sln.docstates
@@ -23,7 +24,6 @@ bld/
 [Bb]in/
 [Oo]bj/
 [Ll]og/
-*.cso
 
 # Visual Studio 2015 cache/options directory
 .vs/
