@@ -33,8 +33,8 @@ namespace Sample
         private Adapter CurrentAdapter;
 
         private SharpDX.Direct3D11.Device D3D11Device;
-        private SharpDX.Direct3D11.DeviceContext ImmediateContext;
-        private SwapChain swapChain;
+        private DeviceContext ImmediateContext;
+        private SwapChain1 swapChain1;
         private RenderTargetView renderTargetView;
         private VertexShader vertexShader;
         private PixelShader pixelShader;
@@ -73,6 +73,10 @@ namespace Sample
                     if (CurrentAdapter != null) await CreateDirectX();
                 });
             };
+
+            SizeChanged += (a, b) => {
+                SetViewport();
+            };
         }
 
         async Task CreateDirectX() {
@@ -80,7 +84,6 @@ namespace Sample
             CreateDevice();
             await Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
                 CreateSwapChain();
-                SetViewport();
             });
             CreateRenderTargetView();
             await LoadShader();
@@ -96,8 +99,6 @@ namespace Sample
             FeatureLevel[] featureLevels = new FeatureLevel[] {
                 FeatureLevel.Level_11_1,
                 FeatureLevel.Level_11_0,
-                FeatureLevel.Level_10_1,
-                FeatureLevel.Level_10_0,
             };
             D3D11Device = new SharpDX.Direct3D11.Device(CurrentAdapter, DeviceCreationFlags.Debug, featureLevels);
             ImmediateContext = D3D11Device.ImmediateContext;
@@ -119,27 +120,27 @@ namespace Sample
                 SampleDescription = new SampleDescription(1, 0),
                 Scaling = Scaling.Stretch,
                 Format = Format.R8G8B8A8_UNorm,
-                Height = (int)(ActualHeight),
-                Width = (int)(ActualWidth),
+                Height = 1080,
+                Width = 1920,
             };
 
             // 建立SwapChain
             using (SharpDX.DXGI.Device3 dxgiDevice3 = D3D11Device.QueryInterface<SharpDX.DXGI.Device3>()) {
                 using (Factory2 dxgiFactory2 = dxgiDevice3.Adapter.GetParent<Factory2>()) {
-                    using (SwapChain1 swapChain1 = new SwapChain1(dxgiFactory2, D3D11Device, ref swapChainDescription)) {
-                        swapChain = swapChain1.QueryInterface<SwapChain>();
-                    }
+                    swapChain1 = new SwapChain1(dxgiFactory2, D3D11Device, ref swapChainDescription);
+                    swapChain1.QueryInterface<SwapChain>();
                 }
             }
 
             // 把Xaml的SwapChainPanel與DirectX的SwapChain連結起來
             using (ISwapChainPanelNative swapChainPanelNative = ComObject.As<ISwapChainPanelNative>(this)) {
-                swapChainPanelNative.SwapChain = swapChain;
+                swapChainPanelNative.SwapChain = swapChain1;
+                SetViewport();
             }
         }
 
         void CreateRenderTargetView() {
-            var backBuffer = SharpDX.Direct3D11.Resource.FromSwapChain<Texture2D>(swapChain, 0);
+            var backBuffer = SharpDX.Direct3D11.Resource.FromSwapChain<Texture2D>(swapChain1, 0);
             renderTargetView = new RenderTargetView(D3D11Device, backBuffer);
             Utilities.Dispose(ref backBuffer);
 
@@ -147,7 +148,9 @@ namespace Sample
         }
 
         void SetViewport() {
-            ImmediateContext.Rasterizer.SetViewport(0, 0, (float)(ActualWidth), (float)(ActualHeight), 0.0f, 1.0f);
+            if (ImmediateContext != null) {
+                ImmediateContext.Rasterizer.SetViewport(0, 0, (float)(Math.Floor(ActualWidth)), (float)(Math.Floor(ActualHeight)));
+            }
         }
 
         async Task LoadShader() {
@@ -188,19 +191,21 @@ namespace Sample
         }
 
         void Update() {
-
+            // 更新資料
+            // 並沒有
         }
 
         void Render() {
             if (ImmediateContext != null) {
+                // https://msdn.microsoft.com/en-us/library/windows/desktop/bb205120(v=vs.85).aspx
+                // 把renderTargetView綁定到Output-Merger Stage
                 ImmediateContext.OutputMerger.SetRenderTargets(renderTargetView);
-                // Clear Screen to Teal.
-                ImmediateContext.ClearRenderTargetView(renderTargetView, Color.Teal);
-
+                // 填滿背景色
+                ImmediateContext.ClearRenderTargetView(renderTargetView, Color.Black);
                 // 畫一個三角形
                 ImmediateContext.Draw(3, 0);
-
-                swapChain.Present(1, PresentFlags.None);
+                // 把畫好的結果輸出到螢幕上！
+                swapChain1.Present(1, PresentFlags.None);
             }
         }
 

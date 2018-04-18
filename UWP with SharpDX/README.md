@@ -1,11 +1,13 @@
 # DirectX-Sample
 自我學習DirectX征途之中所產生出的範例程式
 
+------
 
 
-## 建立環境
 
-首次建置前要先"還原Nuget"以下載必要的套件
+## 前置作業
+
+首次建置前要先"還原Nuget"為了下載必要的相依套件
 
 <img src="https://i.imgur.com/WEcAJNP.png"/>
 

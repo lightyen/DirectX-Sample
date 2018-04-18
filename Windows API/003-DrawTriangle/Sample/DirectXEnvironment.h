@@ -59,8 +59,6 @@ namespace DirectX {
 			{
 				D3D_FEATURE_LEVEL_11_1,
 				D3D_FEATURE_LEVEL_11_0,
-				D3D_FEATURE_LEVEL_10_1,
-				D3D_FEATURE_LEVEL_10_0,
 			};
 
 			hr = D3D11CreateDevice(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
@@ -216,16 +214,15 @@ namespace DirectX {
 
 		void Render() {
 			if (ImmediateContext != nullptr) {
+				// 把RenderTargetView綁定到Output-Merger Stage
 				// 注意這裡是GetAddressOf,而不是ReleaseAndGetAddressOf
 				ImmediateContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
-
-				// Clear Screen to Teal.
-				ImmediateContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::Teal);
-
+				// 填滿背景色
+				ImmediateContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::Black);
 				// 畫一個三角形
 				ImmediateContext->Draw(3, 0);
-
-				SwapChain->Present(1, 0);
+				// 把畫好的結果輸出到螢幕上！
+				SwapChain1->Present(1, 0);
 			}
 		}
 
