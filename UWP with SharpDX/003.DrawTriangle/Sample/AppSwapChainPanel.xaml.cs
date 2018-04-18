@@ -177,17 +177,11 @@ namespace Sample
                 new SimpleVertex { Position = new Vector4(-0.5f, -0.5f, 0.5f, 1.0f), Color = new Vector4(0.0f, 0.0f, 1.0f, 1.0f)},
             };
 
-            var tices = new[] {
-                new Vector4(0.0f, 0.5f, 0.5f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-                new Vector4(0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-                new Vector4(-0.5f, -0.5f, 0.5f, 1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-            };
-
             // CreateBuffer
-            var buffer = SharpDX.Direct3D11.Buffer.Create(D3D11Device, BindFlags.VertexBuffer, tices);
+            var buffer = SharpDX.Direct3D11.Buffer.Create(D3D11Device, BindFlags.VertexBuffer, vertices);
 
             // SetVertexBuffers
-            ImmediateContext.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(buffer, 4 * 8, 0));
+            ImmediateContext.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(buffer, Utilities.SizeOf<SimpleVertex>(), 0));
 
             // Set primitive topology
             ImmediateContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
