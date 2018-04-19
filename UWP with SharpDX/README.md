@@ -23,7 +23,10 @@ Visual Studio 2017. Windows 10 SDK.
 
 錯誤提示說明找不到**fxc.exe**,解決方法是：
 
-從**C:\Program Files (x86)\Windows Kits\10\Bin\10.0.xxx\x86**把**fxc.exe**複製一份到**C:\Program Files (x86)\Windows Kits\10\bin\x86**即可。
+- 從**C:\Program Files (x86)\Windows Kits\10\Bin\10.0.xxx\x86**把**fxc.exe**複製一份到**C:\Program Files (x86)\Windows Kits\10\bin\x86**即可。
 
-據說是HLSL編譯工具把其所參考的路徑給寫死了，所以只會參考那個**x86**資料夾。
+
+```
+後來我發現我的C:\Program Files (x86)\Windows Kits\10\bin\x86根本是空的，索性把整個資料夾的內容都複製過去。不過比較好的解決方法應該是重新安裝Visual Studio吧，一想到要花很長的時間就懶了。
+```
 

@@ -13,11 +13,13 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Core;
+
 namespace Sample
 {
     public sealed partial class MainPage : Page {
         public MainPage() {
             this.InitializeComponent();
+
             var window = CoreWindow.GetForCurrentThread();
             window.KeyDown += (a, b) => {
                 if (b.VirtualKey == Windows.System.VirtualKey.Escape) {

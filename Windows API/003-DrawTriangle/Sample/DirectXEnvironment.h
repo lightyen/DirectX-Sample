@@ -6,6 +6,7 @@
 #include <vector>
 #include <d3d11.h>
 #include <d3d11_1.h>
+#include <dxgi.h>
 #include <dxgi1_2.h>
 #include <DirectXColors.h>
 #include <wrl\client.h>
@@ -46,7 +47,6 @@ namespace DirectX {
 			HRESULT hr = E_FAIL;
 
 			// ¿Ú±oDXGI§∂≠±
-			
 			hr = CreateDXGIFactory(IID_PPV_ARGS(&DXGIFactory));
 			CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
 
