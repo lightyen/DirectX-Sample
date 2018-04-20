@@ -45,7 +45,7 @@ namespace DirectX {
 
 		void Initialize(D3D11_CREATE_DEVICE_FLAG flags = D3D11_CREATE_DEVICE_DEBUG) {
 			HRESULT hr = E_FAIL;
-
+			
 			// ¿Ú±oDXGI§∂≠±
 			hr = CreateDXGIFactory(IID_PPV_ARGS(&DXGIFactory));
 			CHECKRETURN(hr, TEXT("CreateDXGIFactory"));

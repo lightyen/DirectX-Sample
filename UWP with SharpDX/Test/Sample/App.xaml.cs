@@ -41,6 +41,7 @@ namespace Sample
         {
 #if DEBUG
             this.DebugSettings.EnableFrameRateCounter = true;
+            this.DebugSettings.IsOverdrawHeatMapEnabled = false;
 #endif
             Frame rootFrame = Window.Current.Content as Frame;
 
