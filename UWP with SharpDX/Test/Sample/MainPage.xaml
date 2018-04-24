@@ -7,6 +7,12 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <local:AppSwapChainPanel x:Name="AppSwapChainPanel" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Button Grid.Column="0" Height="100" HorizontalAlignment="Stretch" VerticalAlignment="Top" Click="Button_Click" />
+        <Image Grid.Column="0" x:Name="TestImage" Height="300" />
+        <local:AppSwapChainPanel x:Name="AppSwapChainPanel" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
 </Page>

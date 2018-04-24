@@ -14,6 +14,11 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Core;
 
+using System.Threading.Tasks;
+using QRCoder;
+using Windows.Storage.Streams;
+using Windows.UI.Xaml.Media.Imaging;
+
 namespace Sample
 {
     public sealed partial class MainPage : Page {
@@ -26,6 +31,26 @@ namespace Sample
                     Application.Current.Exit();
                 }
             };
+        }
+
+        private async void Button_Click(object sender, RoutedEventArgs e) {
+            using (var qrGenerator = new QRCodeGenerator()) {
+                var data = qrGenerator.CreateQrCode("hello world", QRCodeGenerator.ECCLevel.Q);
+                PngByteQRCode qrCode = new PngByteQRCode(data);
+                byte[] qrCodeAsPngByteArr = qrCode.GetGraphic(30);
+                
+                using (var stream = new InMemoryRandomAccessStream()) {
+                    using (var writer = new DataWriter(stream.GetOutputStreamAt(0))) {
+                        writer.WriteBytes(qrCodeAsPngByteArr);
+                        await writer.StoreAsync();
+                    }
+                    var image = new BitmapImage();
+                    await image.SetSourceAsync(stream);
+                    SurfaceImageSource dd = new SurfaceImageSource(400, 400);
+
+                    TestImage.Source = image;
+                }
+            }
         }
     }
 }
