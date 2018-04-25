@@ -6,7 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 using Windows.UI.Xaml.Controls;
 using MyGame;
-using QRCoder;
 
 namespace Sample {
     /// <summary>
@@ -25,14 +24,6 @@ namespace Sample {
                     xPanel = new DirectXPanel(new SharpDX.Size2(1920, 1080), this);
                     xPanel.SetView((float)ActualWidth, (float)ActualHeight);
                     Task.Run(async () => {
-
-                        using (var qrGenerator = new QRCodeGenerator()) {
-                            var data = qrGenerator.CreateQrCode("hello world", QRCodeGenerator.ECCLevel.Q);
-                            BitmapByteQRCode qrCode = new BitmapByteQRCode(data);
-                            byte[] qrCodeAsBitmapByteArr = qrCode.GetGraphic(30);
-                            xPanel.Test(qrCodeAsBitmapByteArr);
-                        }
-
                         await xPanel.Start();
                     });
                 };

@@ -4,6 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <AppxBundlePlatforms>x86|x64|arm</AppxBundlePlatforms>
     <ProjectGuid>{3E663493-DCF2-4158-A48B-2762DF81D21F}</ProjectGuid>
     <OutputType>AppContainerExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
@@ -100,6 +101,7 @@
       <DependentUpon>AppSwapChainPanel.xaml</DependentUpon>
     </Compile>
     <Compile Include="DirectXPanel.cs" />
+    <Compile Include="Extensions.cs" />
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
@@ -162,6 +164,7 @@
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <VertexShader Include="Shader\VertexShader.hlsl">
       <CustomToolNamespace>Hello</CustomToolNamespace>
+      <ShaderModel>4_0</ShaderModel>
     </VertexShader>
   </ItemGroup>
   <ItemGroup>
@@ -201,6 +204,9 @@
       <Version>4.0.1</Version>
     </PackageReference>
     <PackageReference Include="SharpDX.Direct3D11.Effects">
+      <Version>4.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX.Direct3D12">
       <Version>4.0.1</Version>
     </PackageReference>
     <PackageReference Include="SharpDX.DXGI">

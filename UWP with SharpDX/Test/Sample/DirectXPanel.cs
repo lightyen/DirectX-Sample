@@ -241,7 +241,7 @@ namespace MyGame {
 
             InputElement[] layout = new InputElement[] {
                 new InputElement("POSITION", 0, Format.R32G32B32A32_Float, 0, 0),
-                new InputElement("COLOR", 0, Format.R32G32B32A32_Float, 16, 0),
+                new InputElement("TEXCOORD", 0, Format.R32G32_Float, 16, 0),
             };
             VertexLayout = new InputLayout(D3D11Device, VertexShaderByteCode, layout);
         }
@@ -251,35 +251,48 @@ namespace MyGame {
             SetViewport(MainContext);
         }
 
-        private SharpDX.Direct2D1.Bitmap1 qrCode;
+        public void Test() {
+            using (var qrGenerator = new QRCodeGenerator()) {
+                var data = qrGenerator.CreateQrCode("hello world", QRCodeGenerator.ECCLevel.Q);
+                BitmapByteQRCode qrCode = new BitmapByteQRCode(data);
+                byte[] qrCodeAsBitmapByteArr = qrCode.GetGraphic(30);
+                Test(qrCodeAsBitmapByteArr);
+            }
+        }
 
         public void Test(byte[] data) {
-            using (var memoryStream = new MemoryStream(data))
-            using (var factory = new ImagingFactory())
+
+            using (var memoryStream = new MemoryStream(data, false))
+            using (var factory = new ImagingFactory2())
             using (var decoder = new BitmapDecoder(factory, ContainerFormatGuids.Bmp))
             using (var wicstream = new WICStream(factory, memoryStream)) {
 
                 decoder.Initialize(wicstream, DecodeOptions.CacheOnDemand);
 
-                using (var frameDecode = decoder.GetFrame(0))
-                using (var formatCoverter = new FormatConverter(factory)) {
-
-
-                    Guid srcFormat = PixelFormat.Format32bppBGRA;
-                    Guid desFormat = PixelFormat.Format128bppRGBAFloat;
-
-                    if (formatCoverter.CanConvert(srcFormat, desFormat)) {
-                        formatCoverter.Initialize(frameDecode, desFormat);
-
-                        ////////........................................
-                        qrCode = SharpDX.Direct2D1.Bitmap1.FromWicBitmap(D2DDeviceContext, formatCoverter, new SharpDX.Direct2D1.BitmapProperties1() {
-                            DpiX = 96.0f,
-                            DpiY = 96.0f,
-                            PixelFormat = new SharpDX.Direct2D1.PixelFormat(Format.R32G32B32A32_Float, SharpDX.Direct2D1.AlphaMode.Premultiplied),
-                            BitmapOptions = SharpDX.Direct2D1.BitmapOptions.None
-                        });
+                using (var frame = decoder.GetFrame(0)) {
+                    try {
+                        CreateTextureFromWIC(D3D11Device, MainContext, frame,
+                            0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.None, ResourceOptionFlags.None, LoadFlags.Default,
+                            out SharpDX.Direct3D11.Resource texture, out ShaderResourceView textureView);
+                        MainContext.PixelShader.SetShaderResource(0, textureView);
+                    } catch (SharpDXException e) {
+                        Debug.WriteLine(e.ToString());
                     }
                 }
+                //Guid srcFormat = frameDecode.PixelFormat;
+                //Guid desFormat = PixelFormat.Format128bppRGBAFloat;
+
+                //if (formatCoverter.CanConvert(srcFormat, desFormat)) {
+                //    formatCoverter.Initialize(frameDecode, desFormat, BitmapDitherType.None, null, 0, BitmapPaletteType.Custom);
+
+                //    ////////........................................
+                //    qrCode = SharpDX.Direct2D1.Bitmap1.FromWicBitmap(D2DDeviceContext, formatCoverter, new SharpDX.Direct2D1.BitmapProperties1() {
+                //        DpiX = 96.0f,
+                //        DpiY = 96.0f,
+                //        PixelFormat = new SharpDX.Direct2D1.PixelFormat(Format.R32G32B32A32_Float, SharpDX.Direct2D1.AlphaMode.Premultiplied),
+                //        BitmapOptions = SharpDX.Direct2D1.BitmapOptions.None
+                //    });
+                //}
             }
         }
 
@@ -367,13 +380,13 @@ namespace MyGame {
             float height = 1080.0f;
 
             var vertices = new SimpleVertex[] {
-                new SimpleVertex { Position = new Vector4(0.0f, height * 0.6f, 1.0f, 1.0f), Color = new Vector4(1.0f, 0.0f, 0.0f, 1.0f)},
+                new SimpleVertex { Position = new Vector4(0.0f, height * 0.6f, 1.0f, 1.0f), TexCoord = new Vector2(0.0f, 0.0f)},
 
-                new SimpleVertex { Position = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), Color = new Vector4(0.0f, 0.0f, 1.0f, 1.0f)},
+                new SimpleVertex { Position = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), TexCoord = new Vector2(1.0f, 0.0f)},
 
-                new SimpleVertex { Position = new Vector4(width * 0.6f, 0.0f, 1.0f, 1.0f), Color = new Vector4(0.0f, 1.0f, 0.0f, 1.0f)},
+                new SimpleVertex { Position = new Vector4(width * 0.6f, 0.0f, 1.0f, 1.0f), TexCoord = new Vector2(1.0f, 1.0f)},
 
-                new SimpleVertex { Position = new Vector4(width * 0.6f, height * 0.6f, 1.0f, 1.0f), Color = new Vector4(1.0f, 1.0f, 1.0f, 1.0f)},
+                new SimpleVertex { Position = new Vector4(width * 0.6f, height * 0.6f, 1.0f, 1.0f), TexCoord = new Vector2(0.0f, 1.0f)},
             };
 
             // CreateBuffer 在記憶體
@@ -392,6 +405,21 @@ namespace MyGame {
 
             var mat = Matrix.Translation(-width * 0.6f / 2.0f, -height * 0.6f / 2.0f, 0.0f) * Matrix.OrthoLH(width, height, -1.0f, 1.0f);
             context.UpdateSubresource(ref mat, staticContantBuffer);
+
+            var sampDesc = new SamplerStateDescription() {
+                Filter = Filter.MinMagMipLinear,
+                AddressU = TextureAddressMode.Wrap,
+                AddressV = TextureAddressMode.Wrap,
+                AddressW = TextureAddressMode.Wrap,
+                ComparisonFunction = Comparison.Never,
+                MinimumLod = 0.0f,
+                MaximumLod = 0.0f,
+            };
+
+            var samplerLinear = new SamplerState(D3D11Device, sampDesc);
+            context.PixelShader.SetSampler(0, samplerLinear);
+
+            Test();
 
             // Set primitive topology
             context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
@@ -441,8 +469,214 @@ namespace MyGame {
             }
             return code;
         }
-    }
 
+        public Result CreateTextureFromWIC(SharpDX.Direct3D11.Device device, DeviceContext deviceContext,
+        BitmapFrameDecode frame, int maxsize,
+        ResourceUsage usage, BindFlags bind, CpuAccessFlags cpuAccess, ResourceOptionFlags option, LoadFlags load,
+        out SharpDX.Direct3D11.Resource texture, out ShaderResourceView textureView) {
+            texture = null;
+            textureView = null;
+
+            if (frame.Size.Width <= 0 || frame.Size.Height <= 0) return Result.InvalidArg;
+
+            if (maxsize == 0) {
+                switch (device.FeatureLevel) {
+                    case FeatureLevel.Level_9_1:
+                    case FeatureLevel.Level_9_2:
+                        maxsize = 2048 /*D3D_FL9_1_REQ_TEXTURE2D_U_OR_V_DIMENSION*/;
+                        break;
+                    case FeatureLevel.Level_9_3:
+                        maxsize = 4096 /*D3D_FL9_3_REQ_TEXTURE2D_U_OR_V_DIMENSION*/;
+                        break;
+                    case FeatureLevel.Level_10_0:
+                    case FeatureLevel.Level_10_1:
+                        maxsize = 8192 /*D3D10_REQ_TEXTURE2D_U_OR_V_DIMENSION*/;
+                        break;
+                    default:
+                        maxsize = SharpDX.Direct3D11.Resource.MaximumTexture2DSize; /*D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION*/
+                        break;
+                }
+            }
+
+            Size2 frameSize = frame.Size;
+            Size2 targetSize;
+
+            if (frameSize.Width > maxsize || frameSize.Height > maxsize) {
+                double ratio = Convert.ToDouble(frameSize.Height) / Convert.ToDouble(frameSize.Width);
+                if (frameSize.Width > frameSize.Height) {
+                    targetSize.Width = maxsize;
+                    targetSize.Height = Math.Max(1, Convert.ToInt32(maxsize * ratio));
+                } else {
+                    targetSize.Height = maxsize;
+                    targetSize.Width = Math.Max(1, Convert.ToInt32(maxsize / ratio));
+                }
+            } else {
+                targetSize = frameSize;
+            }
+
+            // Determine format
+            Guid sourceFormat = frame.PixelFormat;
+            Guid targetFormat = sourceFormat;
+            Format format = sourceFormat.ConvertToDXGIFormat();
+            int bpp = 0;
+
+            if (format == Format.Unknown) {
+                if (sourceFormat == PixelFormat.Format96bppRGBFixedPoint) {
+                    targetFormat = PixelFormat.Format96bppRGBFloat;
+                    format = Format.R32G32B32_Float;
+                    bpp = 96;
+                } else {
+                    targetFormat = sourceFormat.ConvertToNearest();
+                    format = targetFormat.ConvertToDXGIFormat();
+                    bpp = PixelFormat.GetBitsPerPixel(targetFormat);
+                }
+                if (format == Format.Unknown)
+                    return Result.GetResultFromWin32Error(unchecked((int)0x80070032));
+            } else {
+                bpp = PixelFormat.GetBitsPerPixel(sourceFormat);
+            }
+
+            if (format == Format.R32G32B32_Float && deviceContext != null && textureView != null) {
+                // Special case test for optional device support for autogen mipchains for R32G32B32_FLOAT 
+
+                var formatSupport = device.CheckFormatSupport(Format.R32G32B32_Float);
+
+                if (!formatSupport.HasFlag(FormatSupport.MipAutogen)) {
+                    targetFormat = PixelFormat.Format128bppRGBAFloat;
+                    format = Format.R32G32B32A32_Float;
+                    bpp = 128;
+                }
+            }
+
+            if (bpp == 0) return Result.Fail;
+
+            if (load.HasFlag(LoadFlags.ForceSrgb)) {
+                format = format.MakeSRgb();
+            } else if (!load.HasFlag(LoadFlags.ignoreSrgb)) {
+
+                //try {
+                //    var metareader = frame.MetadataQueryReader;
+                //    var containerFormat = metareader.ContainerFormat;
+
+                //    // Check for sRGB colorspace metadata
+                //    bool sRGB = false;
+                //    if (metareader.GetMetadataByName("/sRGB/RenderingIntent") != null) {
+                //        sRGB = true;
+                //    } else if (metareader.GetMetadataByName("System.Image.ColorSpace") != null) {
+                //        sRGB = true;
+                //    }
+
+                //    if (sRGB)
+                //        format = format.MakeSRgb();
+                //} catch (SharpDXException e) {
+                //    Debug.WriteLine(e.ToString());
+                //}
+
+                
+
+                
+            }
+
+            var support = device.CheckFormatSupport(format);
+            if (support.HasFlag(FormatSupport.Texture2D)) {
+                targetFormat = PixelFormat.Format32bppRGBA;
+                format = Format.R8G8B8A8_UNorm;
+                bpp = 32;
+            }
+
+            // 開始轉換.....
+
+            int stride = (targetSize.Width * bpp + 7) / 8;
+            int imageSize = stride * targetSize.Height;
+            IntPtr temp = System.Runtime.InteropServices.Marshal.AllocCoTaskMem(imageSize);
+            
+
+            if (sourceFormat == targetFormat && frameSize == targetSize) { // 不需要格式轉換 且 不需要改變大小
+                frame.CopyPixels(stride, new DataPointer(temp, imageSize));
+            } else if (frameSize == targetSize) { // 需要格式轉換
+                using (var factory = new ImagingFactory2())
+                using (var coverter = new FormatConverter(factory)) {
+                    if (coverter.CanConvert(sourceFormat, targetFormat)) {
+                        coverter.Initialize(frame, targetFormat, BitmapDitherType.ErrorDiffusion, null, 0, BitmapPaletteType.MedianCut);
+                        coverter.CopyPixels(stride, new DataPointer(temp, imageSize));
+                    } else {
+                        return Result.UnexpectedFailure;
+                    }
+                }
+            } else if (sourceFormat == targetFormat) { // 需要改變大小
+                using (var factory = new ImagingFactory2())
+                using (var scaler = new BitmapScaler(factory)) {
+                    scaler.Initialize(frame, targetSize.Width, targetSize.Height, BitmapInterpolationMode.Fant);
+                    var pfScaler = scaler.PixelFormat;
+                    if (targetFormat == pfScaler) {
+                        scaler.CopyPixels(stride, new DataPointer(temp, imageSize));
+                    }
+                }
+            } else { // 需要格式轉換 且 需要改變大小
+                using (var factory = new ImagingFactory2())
+                using (var scaler = new BitmapScaler(factory))
+                using (var coverter = new FormatConverter(factory)) {
+                    scaler.Initialize(frame, targetSize.Width, targetSize.Height, BitmapInterpolationMode.Fant);
+                    var pfScaler = scaler.PixelFormat;
+
+                    if (coverter.CanConvert(pfScaler, targetFormat)) {
+
+                        coverter.Initialize(scaler, targetFormat, BitmapDitherType.ErrorDiffusion, null, 0, BitmapPaletteType.MedianCut);
+                        coverter.CopyPixels(stride, new DataPointer(temp, imageSize));
+                    } else {
+                        return Result.UnexpectedFailure;
+                    }
+
+                }
+            }
+
+            //byte[] test = new byte[imageSize];
+            //System.Runtime.InteropServices.Marshal.Copy(temp, test, 0, imageSize);
+
+            bool autogen = false;
+            if (deviceContext != null && textureView != null) // Must have context and shader-view to auto generate mipmaps
+            {
+                var formatSupport = device.CheckFormatSupport(format);
+                if (formatSupport.HasFlag(FormatSupport.MipAutogen)) {
+                    autogen = true;
+                }
+            }
+
+            var texture2DDescription = new Texture2DDescription() {
+                Width = targetSize.Width,
+                Height = targetSize.Height,
+                MipLevels = autogen ? 0 : 1,
+                ArraySize = 1,
+                Format = format,
+                SampleDescription = new SampleDescription(1, 0),
+                Usage = usage,
+                CpuAccessFlags = cpuAccess,
+            };
+
+            if (autogen) {
+                texture2DDescription.BindFlags = bind | BindFlags.RenderTarget;
+                texture2DDescription.OptionFlags = option | ResourceOptionFlags.GenerateMipMaps;
+            } else {
+                texture2DDescription.BindFlags = bind;
+                texture2DDescription.OptionFlags = option;
+            }
+
+            // 建立Texture2D !!!
+            texture = new Texture2D(device, texture2DDescription, new DataBox[] { new DataBox(temp, stride, imageSize) });
+
+            var SRVDesc = new ShaderResourceViewDescription() {
+                Format = format,
+                Dimension = ShaderResourceViewDimension.Texture2D,
+                Texture2D = new ShaderResourceViewDescription.Texture2DResource() { MipLevels = autogen ? -1 : 1 },
+            };
+
+            textureView = new ShaderResourceView(device, texture, SRVDesc);
+
+            System.Runtime.InteropServices.Marshal.FreeCoTaskMem(temp);
+
+            return Result.Ok;
+        }
+    }
     public class DeviceInfo {
         public FeatureLevel FeatureLevel;
         public PointerSize DedicatedVideoMemory;

@@ -6,7 +6,7 @@ namespace MyGame {
             get; set;
         }
 
-        public Vector4 Color {
+        public Vector2 TexCoord {
             get; set;
         }
     }
