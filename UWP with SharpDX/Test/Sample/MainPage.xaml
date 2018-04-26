@@ -8,11 +8,13 @@
     mc:Ignorable="d">
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="350" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <Button Grid.Column="0" Height="100" HorizontalAlignment="Stretch" VerticalAlignment="Top" Click="Button_Click" />
-        <Image Grid.Column="0" x:Name="TestImage" Height="300" />
+        <StackPanel Grid.Column="0" Orientation="Vertical">
+            <Button Height="50" HorizontalAlignment="Stretch" VerticalAlignment="Top" Click="Button_Click" />
+            <TextBox Margin="0,20,0,20" Text="{Binding QRMessage, Mode=TwoWay}" Height="50" />
+        </StackPanel>
         <local:AppSwapChainPanel x:Name="AppSwapChainPanel" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>
 </Page>

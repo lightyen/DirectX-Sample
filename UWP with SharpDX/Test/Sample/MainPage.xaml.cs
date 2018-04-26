@@ -13,7 +13,8 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Core;
-
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using QRCoder;
 using Windows.Storage.Streams;
@@ -21,9 +22,18 @@ using Windows.UI.Xaml.Media.Imaging;
 
 namespace Sample
 {
-    public sealed partial class MainPage : Page {
+    public sealed partial class MainPage : Page, INotifyPropertyChanged {
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        private string msg;
+
         public MainPage() {
+
             this.InitializeComponent();
+
+            this.DataContext = this;
+
+            QRMessage = "https://github.com/lightyen/DirectX-Sample";
 
             var window = CoreWindow.GetForCurrentThread();
             window.KeyDown += (a, b) => {
@@ -33,24 +43,23 @@ namespace Sample
             };
         }
 
-        private async void Button_Click(object sender, RoutedEventArgs e) {
-            using (var qrGenerator = new QRCodeGenerator()) {
-                var data = qrGenerator.CreateQrCode("hello world", QRCodeGenerator.ECCLevel.Q);
-                PngByteQRCode qrCode = new PngByteQRCode(data);
-                byte[] qrCodeAsPngByteArr = qrCode.GetGraphic(30);
-                
-                using (var stream = new InMemoryRandomAccessStream()) {
-                    using (var writer = new DataWriter(stream.GetOutputStreamAt(0))) {
-                        writer.WriteBytes(qrCodeAsPngByteArr);
-                        await writer.StoreAsync();
-                    }
-                    var image = new BitmapImage();
-                    await image.SetSourceAsync(stream);
-                    SurfaceImageSource dd = new SurfaceImageSource(400, 400);
+        private void Button_Click(object sender, RoutedEventArgs e) {
+            if (!string.IsNullOrEmpty(msg))
+                AppSwapChainPanel.Update(msg);
+        }
 
-                    TestImage.Source = image;
-                }
+        public string QRMessage {
+            get {
+                return msg;
             }
+            set {
+                msg = value;
+                NotifyPropertyChanged(nameof(QRMessage));
+            }
+        }
+
+        private void NotifyPropertyChanged([CallerMemberName]string propertyName = "") {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 }

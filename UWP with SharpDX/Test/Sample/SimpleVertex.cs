@@ -6,6 +6,10 @@ namespace MyGame {
             get; set;
         }
 
+        public Vector4 Color {
+            get; set;
+        }
+
         public Vector2 TexCoord {
             get; set;
         }

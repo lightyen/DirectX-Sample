@@ -1,7 +1,14 @@
 ﻿using System;
 using SharpDX.DXGI;
-using SharpDX.WIC;
-namespace MyGame {
+
+namespace SharpDX.WIC {
+
+    public enum LoadFlags {
+        Default,
+        ForceSrgb,
+        ignoreSrgb,
+    }
+
     public static class Extensions {
 
         //-------------------------------------------------------------------------------------
@@ -236,10 +243,4 @@ namespace MyGame {
     }
 }
 
-namespace SharpDX.WIC {
-    public enum LoadFlags {
-        Default,
-        ForceSrgb,
-        ignoreSrgb,
-    }
-}
+

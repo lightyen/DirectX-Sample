@@ -18,15 +18,14 @@ namespace Sample {
         public AppSwapChainPanel() {
             InitializeComponent();
 
-            
+            Loaded += (a, b) => {
+                xPanel = new DirectXPanel(new SharpDX.Size2(1920, 1080), this);
+                xPanel.SetView((float)ActualWidth, (float)ActualHeight);
 
-                Loaded += (a, b) => {
-                    xPanel = new DirectXPanel(new SharpDX.Size2(1920, 1080), this);
-                    xPanel.SetView((float)ActualWidth, (float)ActualHeight);
-                    Task.Run(async () => {
-                        await xPanel.Start();
-                    });
-                };
+                Task.Run(async () => {
+                    await xPanel.Start();
+                });
+            };
 
             Unloaded += (a, b) => {
                 xPanel.Stop();
@@ -36,5 +35,11 @@ namespace Sample {
                 xPanel?.SetView((float)ActualWidth, (float)ActualHeight);
             };
         }
+
+        public void Update(string msg) {
+            xPanel.UpdateQRCode(msg);
+        }
     }
+
+    
 }
