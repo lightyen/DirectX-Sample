@@ -34,13 +34,6 @@ namespace Sample
             this.DataContext = this;
 
             QRMessage = "https://github.com/lightyen/DirectX-Sample";
-
-            var window = CoreWindow.GetForCurrentThread();
-            window.KeyDown += (a, b) => {
-                if (b.VirtualKey == Windows.System.VirtualKey.Escape) {
-                    Application.Current.Exit();
-                }
-            };
         }
 
         private void Button_Click(object sender, RoutedEventArgs e) {
@@ -60,6 +53,26 @@ namespace Sample
 
         private void NotifyPropertyChanged([CallerMemberName]string propertyName = "") {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private async void OpenFile_Click(object sender, RoutedEventArgs e) {
+
+            var picker = new Windows.Storage.Pickers.FileOpenPicker {
+                ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail,
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary
+            };
+
+            picker.FileTypeFilter.Add(".jpg");
+            picker.FileTypeFilter.Add(".jpeg");
+            picker.FileTypeFilter.Add(".png");
+            picker.FileTypeFilter.Add(".dds");
+            picker.FileTypeFilter.Add(".bmp");
+
+            if (await picker.PickSingleFileAsync() is Windows.Storage.StorageFile file) {
+
+                AppSwapChainPanel.Update(file);
+
+            }
         }
     }
 }

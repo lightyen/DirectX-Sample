@@ -2,11 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 using System.Diagnostics;
 using Windows.Storage;
 using Windows.UI.Xaml.Controls;
+
 using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
@@ -33,6 +35,8 @@ namespace MyGame {
         public DeviceInfo DeviceInfo {
             get; private set;
         }
+
+        private SemaphoreSlim ExitSem;
 
         private SharpDX.Direct3D11.Device D3D11Device;
         private DeviceContext MainContext;
@@ -254,22 +258,20 @@ namespace MyGame {
 
         public void UpdateQRCode(string message) {
             QRnew = message;
-            DirectXToolkit.LoadTextureFromFile(new Uri("ms-appx:///Shader/VertexShader.cso"));
         }
 
         private void CreatePngTexture(byte[] data) {
+            if (MainContext != null) {
+                if (DirectXToolkit.CreateTextureFromData(data, ContainerFormatGuids.Png, D3D11Device, out var texture, out var textureView) == Result.Ok) {
+                    MainContext.PixelShader.SetShaderResource(0, textureView);
+                }
+            }
+        }
 
-            using (var factory = new ImagingFactory2())
-            using (var decoder = new PngBitmapDecoder(factory))
-            using (var memoryStream = new MemoryStream(data, false))
-            using (var wicstream = new WICStream(factory, memoryStream)) {
-
-                decoder.Initialize(wicstream, DecodeOptions.CacheOnDemand);
-
-                using (var frame = decoder.GetFrame(0)) {
-                    DirectXToolkit.LoadTextureFromWIC(D3D11Device, frame,
-                            0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.None, ResourceOptionFlags.None, LoadFlags.Default,
-                            out SharpDX.Direct3D11.Resource texture, out ShaderResourceView textureView);
+        private void CreateTextureFromFile(StorageFile file) {
+            if (MainContext != null) {
+                var task = DirectXToolkit.CreateTextureFromFile(file, D3D11Device, out var texture, out var textureView);
+                if (task.Result == Result.Ok) {
                     MainContext.PixelShader.SetShaderResource(0, textureView);
                 }
             }
@@ -286,6 +288,12 @@ namespace MyGame {
 
         private string QRmessage;
         private string QRnew;
+        private StorageFile FileOld;
+        private StorageFile FileNew;
+
+        public void UpdateFile(StorageFile file) {
+            FileNew = file;
+        }
 
         private void Update() {
             // 更新資料
@@ -305,6 +313,9 @@ namespace MyGame {
                     PngByteQRCode qrCode = new PngByteQRCode(data);
                     CreatePngTexture(qrCode.GetGraphic(40));
                 }
+            } else if (FileOld.Name != FileNew.Name) {
+                FileOld = FileNew;
+                CreateTextureFromFile(FileNew);
             }
 
             SetViewport(MainContext);
@@ -357,7 +368,7 @@ namespace MyGame {
 
         private void D2DDraw() {
             D2DDeviceContext.BeginDraw();
-            D2DDeviceContext.DrawText(fpsString, textFormat, new RectangleF(0, ActualSize.Height - 32, 80, 32), textBrush);
+            D2DDeviceContext.DrawText(fpsString, textFormat, new RectangleF(0, ActualSize.Height - 32, 100, 32), textBrush);
             D2DDeviceContext.DrawText(DeviceInfo.ToString(), infoTextFormat, new RectangleF(0, 0, 250, 100), textBrush);
             D2DDeviceContext.EndDraw();
         }
@@ -423,6 +434,8 @@ namespace MyGame {
 
         public async Task Start() {
 
+            ExitSem = new SemaphoreSlim(0, 1);
+
             await LoadResource();
 
             DeviceContext deferredContext;
@@ -437,14 +450,38 @@ namespace MyGame {
             SetViewport(MainContext);
             PreparePipeline(MainContext);
 
+            
+
             while (Running) {
                 Update();
                 Render();
             }
+
+            ExitSem.Release();
         }
 
-        public void Stop() {
-            Running = false;
+        public async Task Stop() {
+            if (Running == true) {
+                Running = false;
+                Clear();
+                await ExitSem.WaitAsync();
+            }
+        }
+
+        public void Clear() {
+            fpsTimer.Stop();
+            Utilities.Dispose(ref textBrush);
+            Utilities.Dispose(ref textFormat);
+            Utilities.Dispose(ref infoTextFormat);
+            Utilities.Dispose(ref pixelShader);
+            Utilities.Dispose(ref vertexShader);
+            Utilities.Dispose(ref renderTargetView);
+            Utilities.Dispose(ref offScreenSurface);
+            Utilities.Dispose(ref D2DDeviceContext);
+            Utilities.Dispose(ref MainContext);
+            Utilities.Dispose(ref SwapChain);
+            Utilities.Dispose(ref D3D11Device);
+            Utilities.Dispose(ref CurrentAdapter);
         }
 
         private async Task<byte[]> LoadShaderCodeFromFile(Uri uri) {
@@ -534,14 +571,15 @@ namespace MyGame {
         public string Format(string format, object arg, IFormatProvider formatProvider) {
             if (arg is PointerSize size) {
                 StringBuilder sb = new StringBuilder();
-                if (size < (1 << 10)) {
-                    sb.Append($"{size} bytes");
-                } else if (size < (1 << 20)) {
-                    sb.Append($"{size / (1 << 10)} KB");
-                } else if (size < (1 << 30)) {
-                    sb.Append($"{size / (1 << 20)} MB");
+                double s = size;
+                if (s < (1 << 10)) {
+                    sb.Append($"{s} bytes");
+                } else if (s < (1 << 20)) {
+                    sb.Append($"{s / (1 << 10):F0} KB");
+                } else if (s < (1 << 30)) {
+                    sb.Append($"{s / (1 << 20):F0} MB");
                 } else {
-                    sb.Append($"{size / (1 << 30)} GB");
+                    sb.Append($"{s / (1 << 30):F0} GB");
                 }
                 return sb.ToString();
             } else {

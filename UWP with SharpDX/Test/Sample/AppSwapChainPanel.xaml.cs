@@ -25,10 +25,14 @@ namespace Sample {
                 Task.Run(async () => {
                     await xPanel.Start();
                 });
-            };
 
-            Unloaded += (a, b) => {
-                xPanel.Stop();
+                var window = Windows.UI.Core.CoreWindow.GetForCurrentThread();
+                window.KeyDown += async (o, e) => {
+                    if (e.VirtualKey == Windows.System.VirtualKey.Escape) {
+                        await xPanel.Stop();
+                        Windows.UI.Xaml.Application.Current.Exit();
+                    }
+                };
             };
 
             SizeChanged += (a, b) => {
@@ -38,6 +42,10 @@ namespace Sample {
 
         public void Update(string msg) {
             xPanel.UpdateQRCode(msg);
+        }
+
+        public void Update(Windows.Storage.StorageFile file) {
+            xPanel.UpdateFile(file);
         }
     }
 
