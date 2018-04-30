@@ -19,6 +19,7 @@ using System.Threading.Tasks;
 using QRCoder;
 using Windows.Storage.Streams;
 using Windows.UI.Xaml.Media.Imaging;
+using MyGame;
 
 namespace Sample
 {
@@ -26,10 +27,24 @@ namespace Sample
 
         public event PropertyChangedEventHandler PropertyChanged;
         private string msg;
+        private Windows.Storage.Pickers.FileOpenPicker picker;
 
         public MainPage() {
 
             this.InitializeComponent();
+
+            picker = new Windows.Storage.Pickers.FileOpenPicker {
+                ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail,
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary
+            };
+
+            picker.FileTypeFilter.Add(".jpg");
+            picker.FileTypeFilter.Add(".jpeg");
+            picker.FileTypeFilter.Add(".png");
+            picker.FileTypeFilter.Add(".gif");
+            picker.FileTypeFilter.Add(".bmp");
+
+            picker.CommitButtonText = "送啦";
 
             this.DataContext = this;
 
@@ -37,8 +52,11 @@ namespace Sample
         }
 
         private void Button_Click(object sender, RoutedEventArgs e) {
-            if (!string.IsNullOrEmpty(msg))
-                AppSwapChainPanel.Update(msg);
+            if (!string.IsNullOrEmpty(msg)) {
+                if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
+                    xPanel.UpdateQRCode(msg);
+                }
+            }
         }
 
         public string QRMessage {
@@ -57,21 +75,10 @@ namespace Sample
 
         private async void OpenFile_Click(object sender, RoutedEventArgs e) {
 
-            var picker = new Windows.Storage.Pickers.FileOpenPicker {
-                ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail,
-                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary
-            };
-
-            picker.FileTypeFilter.Add(".jpg");
-            picker.FileTypeFilter.Add(".jpeg");
-            picker.FileTypeFilter.Add(".png");
-            picker.FileTypeFilter.Add(".dds");
-            picker.FileTypeFilter.Add(".bmp");
-
             if (await picker.PickSingleFileAsync() is Windows.Storage.StorageFile file) {
-
-                AppSwapChainPanel.Update(file);
-
+                if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
+                    xPanel.UpdateFile(file);
+                }
             }
         }
     }

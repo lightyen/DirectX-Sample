@@ -21,35 +21,55 @@ namespace SharpDX.WIC {
         }
 
         /// <summary>
-        /// 從記憶體建立貼圖資源
+        /// 從檔案建立貼圖資源
         /// </summary>
+        /// <param name="file"></param>
         /// <param name="device"></param>
-        /// <param name="data"></param>
-        /// <param name="containerFormatGuid"></param>
-        /// <param name="texture"></param>
-        /// <param name="textureView"></param>
-        /// <returns></returns>
-        public static Result CreateTextureFromData(byte[] data, Guid containerFormatGuid, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
+        public static Result CreateTextureFromFile(Windows.Storage.StorageFile file, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
             Result result = Result.Fail;
-            using (var memoryStream = new MemoryStream(data, false))
-            {
-                result = CreateTextureFromMemory(memoryStream, containerFormatGuid, device, out texture, out textureView);
+            texture = null;
+            textureView = null;
+            if (file != null) {
+                var task = file.OpenAsync(Windows.Storage.FileAccessMode.Read).AsTask();
+                using (var raStream = task.Result)
+                using (var stream = raStream.AsStreamForRead()) {
+                    result = CreateTextureFromStream(stream, device, out texture, out textureView);
+                }
             }
             return result;
         }
 
-        private static Result CreateTextureFromMemory(MemoryStream stream, Guid containerFormatGuid, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
-            return CreateTextureFromStream(stream, containerFormatGuid, device, out texture, out textureView);
-        }
-
-        private static Result CreateTextureFromStream(Stream stream, Guid containerFormatGuid, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
+        /// <summary>
+        /// 從串流<see cref="System.IO.Stream"/>建立貼圖資源
+        /// </summary>
+        /// <param name="stream">串流</param>
+        /// <param name="device">D3D Device</param>
+        public static Result CreateTextureFromStream(Stream stream, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
             texture = null;
             textureView = null;
             Result result = Result.Fail;
+            Guid containerFormatGuid;
             if (stream.CanRead) {
+                if (stream.Length < 104857600 && stream.Length >= 4) {
+                    var temp = new byte[4];
+                    stream.Read(temp, 0, 4);
+                    stream.Seek(0, SeekOrigin.Begin);
+                    if (temp[0] == 0xFF && temp[1] == 0xD8 && temp[2] == 0xFF && temp[3] == 0xE0) {
+                        containerFormatGuid = ContainerFormatGuids.Jpeg;
+                    } else if (temp[0] == 0x89 && temp[1] == 0x50 && temp[2] == 0x4E && temp[3] == 0x47) {
+                        containerFormatGuid = ContainerFormatGuids.Png;
+                    } else if (temp[0] == 0x42 && temp[1] == 0x4D) {
+                        containerFormatGuid = ContainerFormatGuids.Bmp;
+                    } else if (temp[0] == 0x47 && temp[1] == 0x49 && temp[2] == 0x46 && temp[3] == 0x38) {
+                        containerFormatGuid = ContainerFormatGuids.Gif;
+                    }
+                    else {
+                        return Result.Fail;
+                    }
+                }
+
                 using (var decoder = new BitmapDecoder(ImagingFactory, containerFormatGuid))
                 using (var wicstream = new WICStream(ImagingFactory, stream)) {
-
                     try {
                         decoder.Initialize(wicstream, DecodeOptions.CacheOnDemand);
                         using (var frame = decoder.GetFrame(0)) {
@@ -58,87 +78,16 @@ namespace SharpDX.WIC {
                                     out texture, out textureView);
                         }
                     } catch (SharpDXException e) {
-
-                    }
-                    
-                }
-            }
-
-            return result;
-        }
-
-        public static Result CreateTextureFromFile(Windows.Storage.StorageFile file, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
-            Result result = Result.Fail;
-            texture = null;
-            textureView = null;
-            byte[] temp = null;
-            if (file != null) {
-                
-                var task = file.OpenAsync(Windows.Storage.FileAccessMode.Read).AsTask();
-                using (var raStream = task.Result)
-                using (var stream = raStream.AsStreamForRead()) {
-                    if (stream.Length < 104857600) {
-                        temp = new byte[stream.Length];
-                        stream.Read(temp, 0, (int)stream.Length);
-                        
-                    }
-                }
-
-                if (temp != null) {
-                    if (temp.Length > 4) {
-                        using (var mmStream = new MemoryStream(temp)) {
-                            if (temp[0] == 0xFF && temp[1] == 0xD8 && temp[temp.Length - 2] == 0xFF && temp[temp.Length - 1] == 0xD9) {
-                                result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Jpeg, device, out texture, out textureView);
-                            } else if (temp[0] == 0x89 && temp[1] == 0x50 && temp[2] == 0x4E && temp[3] == 0x47) {
-                                result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Png, device, out texture, out textureView);
-                            } else if (temp[0] == 0x42 && temp[1] == 0x4D) {
-                                result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Bmp, device, out texture, out textureView);
-                            } else if (temp[0] == 0x44 && temp[1] == 0x44 && temp[2] == 0x53) {
-                                result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Dds, device, out texture, out textureView);
-                            }
-                        }
-                        //switch (ext) {
-                        //    case ".dds":
-                        //        result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Dds, device, out texture, out textureView);
-                        //        break;
-                        //    case ".png":
-                        //        result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Png, device, out texture, out textureView);
-                        //        break;
-                        //    case ".jpg":
-                        //    case ".jpeg":
-                        //        result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Jpeg, device, out texture, out textureView);
-                        //        break;
-                        //    case ".bmp":
-                        //        result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Bmp, device, out texture, out textureView);
-                        //        break;
-                        //    default:
-                        //        result = Result.Fail;
-                        //        break;
-                        //}
+                        System.Diagnostics.Debug.WriteLine(e.ToString());
                     }
                 }
             }
             return result;
         }
 
-        private static Result CreateTextureFromFile(byte[] data, string fileExtension, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
-            texture = null;
-            textureView = null;
-            switch (fileExtension) {
-                case ".dds":
-                    return CreateTextureFromData(data, ContainerFormatGuids.Dds, device, out texture, out textureView);
-                case ".png":
-                    return CreateTextureFromData(data, ContainerFormatGuids.Png, device, out texture, out textureView);
-                case ".jpg":
-                case ".jpeg":
-                    return CreateTextureFromData(data, ContainerFormatGuids.Jpeg, device, out texture, out textureView);
-                case ".bmp":
-                    return CreateTextureFromData(data, ContainerFormatGuids.Bmp, device, out texture, out textureView);
-                default:
-                    return Result.False;
-            }
-        }
-
+        /// <summary>
+        /// 從WIC Frame建立貼圖資源
+        /// </summary>
         private static Result CreateTextureFromWIC(Direct3D11.Device device, BitmapFrameDecode frame, int maxsize, ResourceUsage usage, BindFlags bind, CpuAccessFlags cpuAccess, ResourceOptionFlags option, LoadFlags load, out Direct3D11.Resource texture, out ShaderResourceView textureView) {
 
             texture = null;

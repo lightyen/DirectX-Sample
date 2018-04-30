@@ -56,6 +56,8 @@ namespace MyGame {
         private SharpDX.DirectWrite.TextFormat textFormat;
         private SharpDX.Direct2D1.SolidColorBrush textBrush;
 
+        private Task<ShaderResourceView> CreateTextureTask;
+
         enum RunMode {
             Immediate = 0,
             Deferred = 1,
@@ -68,23 +70,25 @@ namespace MyGame {
 
         InputLayout VertexLayout;
 
-        public DirectXPanel(Size2 swapChainSize, SwapChainPanel panel) {
-
-            SwapChainSize = swapChainSize;
-            if (swapChainSize.Width * swapChainSize.Height <= 0) {
-                throw new SharpDXException(Result.Fail, "DirectXPanel初始化Size有誤");
-            }
+        public DirectXPanel() {
             FindAdapter();
             CreateDevice();
             if (CurrentAdapter == null) {
                 throw new SharpDXException(Result.Fail, "找不到適合的Adapter");
             }
-            CreateSwapChain();
-            SetSwapChain(panel);
+        }
+
+        public void Initialize(Size2 swapChainSize, SwapChainPanel panel) {
+            if (swapChainSize.Width * swapChainSize.Height <= 0) {
+                throw new SharpDXException(Result.Fail, "DirectXPanel初始化Size有誤");
+            }
+
+            CreateSwapChain(swapChainSize);
+            SetSwapChainTarget(panel);
             TargetSwapChainPanel = panel;
         }
 
-        private void SetSwapChain(SwapChainPanel panel) {
+        private void SetSwapChainTarget(SwapChainPanel panel) {
             // 把Xaml的SwapChainPanel與DirectX的SwapChain連結起來
             using (ISwapChainPanelNative swapChainPanelNative = ComObject.As<ISwapChainPanelNative>(panel)) {
                 swapChainPanelNative.SwapChain = SwapChain;
@@ -139,7 +143,7 @@ namespace MyGame {
             };
         }
 
-        private void CreateSwapChain() {
+        private void CreateSwapChain(Size2 size) {
             // https://docs.microsoft.com/en-us/windows/uwp/gaming/multisampling--multi-sample-anti-aliasing--in-windows-store-apps
             SwapChainDescription1 swapChainDescription = new SwapChainDescription1() {
                 Usage = Usage.RenderTargetOutput | Usage.BackBuffer,
@@ -149,8 +153,8 @@ namespace MyGame {
                 Scaling = Scaling.Stretch,
                 Flags = SwapChainFlags.AllowModeSwitch | SwapChainFlags.AllowTearing,
                 Format = Format.R8G8B8A8_UNorm,
-                Width = SwapChainSize.Width,
-                Height = SwapChainSize.Height,
+                Width = size.Width,
+                Height = size.Height,
             };
 
             Dictionary<int, int> count_quality_levels = new Dictionary<int, int>();
@@ -166,6 +170,7 @@ namespace MyGame {
             using (SharpDX.DXGI.Device3 dxgiDevice3 = D3D11Device.QueryInterface<SharpDX.DXGI.Device3>()) {
                 using (Factory2 dxgiFactory2 = dxgiDevice3.Adapter.GetParent<Factory2>()) {
                     SwapChain = new SwapChain1(dxgiFactory2, D3D11Device, ref swapChainDescription);
+                    SwapChainSize = size;
                 }
             }
         }
@@ -257,22 +262,23 @@ namespace MyGame {
         }
 
         public void UpdateQRCode(string message) {
-            QRnew = message;
-        }
 
-        private void CreatePngTexture(byte[] data) {
-            if (MainContext != null) {
-                if (DirectXToolkit.CreateTextureFromData(data, ContainerFormatGuids.Png, D3D11Device, out var texture, out var textureView) == Result.Ok) {
-                    MainContext.PixelShader.SetShaderResource(0, textureView);
-                }
-            }
-        }
+            if (CreateTextureTask == null) {
+                ShaderResourceView func(string msg, SharpDX.Direct3D11.Device device) {
+                    using (var qrGenerator = new QRCodeGenerator()) {
+                        var data = qrGenerator.CreateQrCode(msg, QRCodeGenerator.ECCLevel.Q);
+                        PngByteQRCode qrCode = new PngByteQRCode(data);
+                        var dataBytes = qrCode.GetGraphic(40);
+                        ShaderResourceView textureView = null;
+                        using (var mmStream = new MemoryStream(dataBytes)) {
+                            if (DirectXToolkit.CreateTextureFromStream(mmStream, device, out var texture, out textureView) == Result.Ok) {
 
-        private void CreateTextureFromFile(StorageFile file) {
-            if (MainContext != null) {
-                if (DirectXToolkit.CreateTextureFromFile(file, D3D11Device, out var texture, out var textureView) == Result.Ok) {
-                    MainContext.PixelShader.SetShaderResource(0, textureView);
+                            }
+                        }
+                        return textureView;
+                    }
                 }
+                CreateTextureTask = Task.Run(() => { return func(message, D3D11Device); });
             }
         }
 
@@ -285,13 +291,18 @@ namespace MyGame {
             }
         }
 
-        private string QRmessage;
-        private string QRnew;
-        private StorageFile FileOld;
-        private StorageFile FileNew;
-
         public void UpdateFile(StorageFile file) {
-            FileNew = file;
+            if (CreateTextureTask == null) {
+                ShaderResourceView func(StorageFile f, SharpDX.Direct3D11.Device device) {
+                    if (DirectXToolkit.CreateTextureFromFile(f, device, out var texture, out var textureView) == Result.Ok) {
+                        return textureView;
+                    }
+                    return null;
+                }
+
+                CreateTextureTask = Task.Run(() => { return func(file, D3D11Device); });
+            }
+                
         }
 
         private void Update() {
@@ -305,16 +316,12 @@ namespace MyGame {
                 fpsTimer.Start();
             }
 
-            if (QRmessage != QRnew) {
-                QRmessage = QRnew;
-                using (var qrGenerator = new QRCodeGenerator()) {
-                    var data = qrGenerator.CreateQrCode(QRnew, QRCodeGenerator.ECCLevel.Q);
-                    PngByteQRCode qrCode = new PngByteQRCode(data);
-                    CreatePngTexture(qrCode.GetGraphic(40));
+            if (CreateTextureTask != null && CreateTextureTask.IsCompletedSuccessfully) {
+                var result = CreateTextureTask.Result;
+                CreateTextureTask = null;
+                if (result != null) {
+                    MainContext?.PixelShader.SetShaderResource(0, result);
                 }
-            } else if (FileOld?.Name != FileNew?.Name) {
-                FileOld = FileNew;
-                CreateTextureFromFile(FileNew);
             }
 
             SetViewport(MainContext);
