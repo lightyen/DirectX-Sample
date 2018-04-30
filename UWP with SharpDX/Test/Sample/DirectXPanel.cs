@@ -270,8 +270,7 @@ namespace MyGame {
 
         private void CreateTextureFromFile(StorageFile file) {
             if (MainContext != null) {
-                var task = DirectXToolkit.CreateTextureFromFile(file, D3D11Device, out var texture, out var textureView);
-                if (task.Result == Result.Ok) {
+                if (DirectXToolkit.CreateTextureFromFile(file, D3D11Device, out var texture, out var textureView) == Result.Ok) {
                     MainContext.PixelShader.SetShaderResource(0, textureView);
                 }
             }
@@ -313,7 +312,7 @@ namespace MyGame {
                     PngByteQRCode qrCode = new PngByteQRCode(data);
                     CreatePngTexture(qrCode.GetGraphic(40));
                 }
-            } else if (FileOld.Name != FileNew.Name) {
+            } else if (FileOld?.Name != FileNew?.Name) {
                 FileOld = FileNew;
                 CreateTextureFromFile(FileNew);
             }
@@ -389,11 +388,11 @@ namespace MyGame {
             var vertices = new SimpleVertex[] {
                 new SimpleVertex { Position = new Vector4(0.0f, height * 0.6f, 1.0f, 1.0f), Color = new Vector4(1.0f, 0.0f, 0.0f, 1.0f), TexCoord = new Vector2(0.0f, 0.0f)},
 
-                new SimpleVertex { Position = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), Color = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), TexCoord = new Vector2(1.0f, 0.0f)},
+                new SimpleVertex { Position = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), Color = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), TexCoord = new Vector2(0.0f, 1.0f)},
 
                 new SimpleVertex { Position = new Vector4(width * 0.6f, 0.0f, 1.0f, 1.0f), Color = new Vector4(0.0f, 1.0f, 0.0f, 1.0f), TexCoord = new Vector2(1.0f, 1.0f)},
 
-                new SimpleVertex { Position = new Vector4(width * 0.6f, height * 0.6f, 1.0f, 1.0f), Color = new Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexCoord = new Vector2(0.0f, 1.0f)},
+                new SimpleVertex { Position = new Vector4(width * 0.6f, height * 0.6f, 1.0f, 1.0f), Color = new Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexCoord = new Vector2(1.0f, 0.0f)},
             };
 
             // CreateBuffer 在記憶體

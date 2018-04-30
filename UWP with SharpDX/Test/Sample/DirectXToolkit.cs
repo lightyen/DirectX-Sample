@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using SharpDX.Direct3D11;
 using SharpDX.Direct3D;
@@ -45,54 +46,75 @@ namespace SharpDX.WIC {
             texture = null;
             textureView = null;
             Result result = Result.Fail;
-
             if (stream.CanRead) {
                 using (var decoder = new BitmapDecoder(ImagingFactory, containerFormatGuid))
                 using (var wicstream = new WICStream(ImagingFactory, stream)) {
 
-                    decoder.Initialize(wicstream, DecodeOptions.CacheOnDemand);
+                    try {
+                        decoder.Initialize(wicstream, DecodeOptions.CacheOnDemand);
+                        using (var frame = decoder.GetFrame(0)) {
+                            result = CreateTextureFromWIC(device, frame,
+                                    0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.None, ResourceOptionFlags.None, LoadFlags.Default,
+                                    out texture, out textureView);
+                        }
+                    } catch (SharpDXException e) {
 
-                    using (var frame = decoder.GetFrame(0)) {
-                        result = CreateTextureFromWIC(device, frame,
-                                0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.None, ResourceOptionFlags.None, LoadFlags.Default,
-                                out texture, out textureView);
                     }
+                    
                 }
             }
 
             return result;
         }
 
-        private static Task<Result> CreateTextureFromFile(Windows.Storage.StorageFile file, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
-            return InternalCreateTextureFromFile(file, device, out texture, out textureView);
-        }
-
-        private static async Task<Result> InternalCreateTextureFromFile(Windows.Storage.StorageFile file, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
+        public static Result CreateTextureFromFile(Windows.Storage.StorageFile file, Direct3D11.Device device, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
             Result result = Result.Fail;
+            texture = null;
+            textureView = null;
+            byte[] temp = null;
             if (file != null) {
-
-                using (var raStream = await file.OpenAsync(Windows.Storage.FileAccessMode.Read))
+                
+                var task = file.OpenAsync(Windows.Storage.FileAccessMode.Read).AsTask();
+                using (var raStream = task.Result)
                 using (var stream = raStream.AsStreamForRead()) {
                     if (stream.Length < 104857600) {
-                        var ext = Path.GetExtension(file.Name);
-                        switch (ext) {
-                            case ".dds":
-                                result = CreateTextureFromStream(stream, ContainerFormatGuids.Dds, device, out texture, out textureView);
-                                break;
-                            case ".png":
-                                result = CreateTextureFromStream(stream, ContainerFormatGuids.Png, device, out texture, out textureView);
-                                break;
-                            case ".jpg":
-                            case ".jpeg":
-                                result = CreateTextureFromStream(stream, ContainerFormatGuids.Jpeg, device, out texture, out textureView);
-                                break;
-                            case ".bmp":
-                                result = CreateTextureFromStream(stream, ContainerFormatGuids.Bmp, device, out texture, out textureView);
-                                break;
-                            default:
-                                result = Result.Fail;
-                                break;
+                        temp = new byte[stream.Length];
+                        stream.Read(temp, 0, (int)stream.Length);
+                        
+                    }
+                }
+
+                if (temp != null) {
+                    if (temp.Length > 4) {
+                        using (var mmStream = new MemoryStream(temp)) {
+                            if (temp[0] == 0xFF && temp[1] == 0xD8 && temp[temp.Length - 2] == 0xFF && temp[temp.Length - 1] == 0xD9) {
+                                result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Jpeg, device, out texture, out textureView);
+                            } else if (temp[0] == 0x89 && temp[1] == 0x50 && temp[2] == 0x4E && temp[3] == 0x47) {
+                                result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Png, device, out texture, out textureView);
+                            } else if (temp[0] == 0x42 && temp[1] == 0x4D) {
+                                result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Bmp, device, out texture, out textureView);
+                            } else if (temp[0] == 0x44 && temp[1] == 0x44 && temp[2] == 0x53) {
+                                result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Dds, device, out texture, out textureView);
+                            }
                         }
+                        //switch (ext) {
+                        //    case ".dds":
+                        //        result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Dds, device, out texture, out textureView);
+                        //        break;
+                        //    case ".png":
+                        //        result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Png, device, out texture, out textureView);
+                        //        break;
+                        //    case ".jpg":
+                        //    case ".jpeg":
+                        //        result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Jpeg, device, out texture, out textureView);
+                        //        break;
+                        //    case ".bmp":
+                        //        result = CreateTextureFromStream(mmStream, ContainerFormatGuids.Bmp, device, out texture, out textureView);
+                        //        break;
+                        //    default:
+                        //        result = Result.Fail;
+                        //        break;
+                        //}
                     }
                 }
             }
@@ -198,11 +220,10 @@ namespace SharpDX.WIC {
             if (load.HasFlag(LoadFlags.ForceSrgb)) {
                 format = format.MakeSRgb();
             } else if (!load.HasFlag(LoadFlags.ignoreSrgb)) {
-
-                var metareader = frame.MetadataQueryReader;
-                var containerFormat = metareader.ContainerFormat;
-
                 try {
+                    var metareader = frame.MetadataQueryReader;
+                    var containerFormat = metareader.ContainerFormat;
+
                     // Check for sRGB colorspace metadata
                     bool sRGB = false;
                     if (metareader.GetMetadataByName("/sRGB/RenderingIntent") != null) {
