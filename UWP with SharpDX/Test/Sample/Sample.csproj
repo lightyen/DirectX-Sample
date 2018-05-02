@@ -77,6 +77,7 @@
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
     <Prefer32Bit>true</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <OutputPath>bin\x64\Release\</OutputPath>
@@ -89,6 +90,7 @@
     <ErrorReport>prompt</ErrorReport>
     <Prefer32Bit>true</Prefer32Bit>
     <UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
@@ -100,6 +102,7 @@
     <Compile Include="AppSwapChainPanel.xaml.cs">
       <DependentUpon>AppSwapChainPanel.xaml</DependentUpon>
     </Compile>
+    <Compile Include="DDSLoader.cs" />
     <Compile Include="DirectXPanel.cs" />
     <Compile Include="DirectXToolkit.cs" />
     <Compile Include="Extensions.cs" />
@@ -203,6 +206,9 @@
       <Version>4.0.1</Version>
     </PackageReference>
     <PackageReference Include="SharpDX.Direct2D1">
+      <Version>4.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX.Direct3D10">
       <Version>4.0.1</Version>
     </PackageReference>
     <PackageReference Include="SharpDX.Direct3D11">
