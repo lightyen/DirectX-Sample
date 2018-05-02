@@ -286,5 +286,120 @@ namespace SharpDX.WIC {
             return Result.Ok;
         }
 
+        private static Result CreateTextureFromDDS(
+            Direct3D11.Device device,
+            Direct3D11.DeviceContext deviceContext,
+            DDS dds,
+            uint bitsize,
+            uint maxsize,
+            ResourceUsage usage,
+            BindFlags bindFlags,
+            CpuAccessFlags cpuAccessFlags,
+            ResourceOptionFlags resourceOptionFlags,
+            bool forceSRGB,
+            out Direct3D11.Resource texture, out ShaderResourceView textureView) {
+
+
+            texture = null;
+            textureView = null;
+
+            uint width = dds.Header.width;
+            uint height = dds.Header.height;
+            uint depth = dds.Header.depth;
+
+            ResourceDimension resourceDimension = ResourceDimension.Unknown;
+            uint arraySize = 1;
+            Format format = Format.Unknown;
+            bool isCubeMap = false;
+
+            uint mipCount = dds.Header.mipMapCount;
+            if (0 == mipCount) {
+                mipCount = 1;
+            }
+
+            if (dds.IsDX10) {
+                arraySize = dds.HeaderDXT10.arraySize;
+                if (arraySize == 0) {
+                    return Result.InvalidArg;
+                }
+
+                switch(dds.HeaderDXT10.dxgiFormat) {
+                    case Format.AI44:
+                    case Format.IA44:
+                    case Format.P8:
+                    case Format.A8P8:
+                        return Result.InvalidArg;
+                    default:
+                        if (dds.HeaderDXT10.dxgiFormat.BitPerPixel() == 0) {
+                            return Result.InvalidArg;
+                        }
+                        break;
+                }
+
+                format = dds.HeaderDXT10.dxgiFormat;
+
+                switch (dds.HeaderDXT10.resourceDimension) {
+                    case ResourceDimension.Texture1D:
+                        // D3DX writes 1D textures with a fixed Height of 1
+                        if ((dds.Header.flags.HasFlag(DDS_HEADER_FLAGS.Height)) && height != 1) {
+                            return Result.InvalidArg;
+                        }
+                        height = depth = 1;
+                        break;
+
+                    case ResourceDimension.Texture2D:
+                        if (dds.HeaderDXT10.miscFlag.HasFlag(ResourceOptionFlags.TextureCube)) {
+                            arraySize *= 6;
+                            isCubeMap = true;
+                        }
+                        depth = 1;
+                        break;
+
+                    case ResourceDimension.Texture3D:
+                        if (!(dds.Header.flags.HasFlag(DDS_HEADER_FLAGS.Volume))) {
+                            return Result.InvalidArg;
+                        }
+
+                        if (arraySize > 1) {
+                            return Result.InvalidArg;
+                        }
+                        break;
+
+                    default:
+                        return Result.InvalidArg;
+                }
+                resourceDimension = dds.HeaderDXT10.resourceDimension;
+            } else {
+                format = dds.Header.ddsPixelFormat.Format;
+
+                if (format == Format.Unknown) {
+                    return Result.InvalidArg;
+                }
+
+                if (dds.Header.flags.HasFlag(DDS_HEADER_FLAGS.Volume)) {
+                    resourceDimension = ResourceDimension.Texture3D;
+                } else {
+#define DDS_CUBEMAP 0x00000200
+                    if (dds.Header.Caps2.ha & DDS_CUBEMAP) {
+                        // We require all six faces to be defined
+                        if ((header->caps2 & DDS_CUBEMAP_ALLFACES) != DDS_CUBEMAP_ALLFACES) {
+                            return Result.InvalidArg;
+                        }
+
+                        arraySize = 6;
+                        isCubeMap = true;
+                    }
+
+                    depth = 1;
+                    resourceDimension = D3D11_RESOURCE_DIMENSION_TEXTURE2D;
+
+                    // Note there's no way for a legacy Direct3D 9 DDS to express a '1D' texture
+                }
+
+                assert(BitsPerPixel(format) != 0);
+            }
+
+            return Result.False;
+        }
     }
 }
