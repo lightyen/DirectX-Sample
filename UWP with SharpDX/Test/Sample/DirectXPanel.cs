@@ -13,7 +13,7 @@ using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
-using SharpDX.DirectXTookit;
+using SharpDX.DirectXToolkit;
 using QRCoder;
 
 namespace MyGame {
@@ -241,11 +241,13 @@ namespace MyGame {
             context.OutputMerger.SetTargets(depthView, renderTargetView);
         }
 
+        DDS dds = null;
+
         private async Task LoadShader() {
 
             var VertexShaderByteCode = await LoadShaderCodeFromFile(new Uri("ms-appx:///Shader/VertexShader.cso"));
             var PixelShaderByteCode = await LoadShaderCodeFromFile(new Uri("ms-appx:///Shader/PixelShader.cso"));
-
+            dds = await LoadDDSFromFile(new Uri("ms-appx:///Shader/seafloor.dds"));
             vertexShader = new VertexShader(D3D11Device, VertexShaderByteCode);
             pixelShader = new PixelShader(D3D11Device, PixelShaderByteCode);
 
@@ -271,9 +273,7 @@ namespace MyGame {
                         var dataBytes = qrCode.GetGraphic(40);
                         ShaderResourceView textureView = null;
                         using (var mmStream = new MemoryStream(dataBytes)) {
-                            if (DirectXToolkit.CreateTextureFromStream(mmStream, device, out var texture, out textureView) == Result.Ok) {
-
-                            }
+                            DirectXToolkit.CreateWICTextureFromStream(device, mmStream, out _, out textureView);
                         }
                         return textureView;
                     }
@@ -294,10 +294,8 @@ namespace MyGame {
         public void UpdateFile(StorageFile file) {
             if (CreateTextureTask == null) {
                 ShaderResourceView func(StorageFile f, SharpDX.Direct3D11.Device device) {
-                    if (DirectXToolkit.CreateTextureFromFile(f, device, out var texture, out var textureView) == Result.Ok) {
-                        return textureView;
-                    }
-                    return null;
+                    DirectXToolkit.CreateTextureFromFile(device, f, out _, out var textureView);
+                    return textureView;
                 }
 
                 CreateTextureTask = Task.Run(() => { return func(file, D3D11Device); });
@@ -470,7 +468,7 @@ namespace MyGame {
             if (Running == true) {
                 Running = false;
                 Clear();
-                await ExitSem.WaitAsync();
+                if (ExitSem != null) await ExitSem.WaitAsync();
             }
         }
 
@@ -504,7 +502,16 @@ namespace MyGame {
             return code;
         }
 
-        
+        private async Task<DDS> LoadDDSFromFile(Uri uri) {
+            DDS dds = null;
+            var file = await StorageFile.GetFileFromApplicationUriAsync(uri);
+            if (file != null) {
+                using (var stream = await file.OpenStreamForReadAsync()) {
+                    dds = new DDS(stream);
+                }
+            }
+            return dds;
+        }
     }
     public class DeviceInfo {
         public FeatureLevel FeatureLevel;

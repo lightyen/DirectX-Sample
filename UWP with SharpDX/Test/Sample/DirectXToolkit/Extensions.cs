@@ -1,7 +1,8 @@
 ﻿using System;
 using SharpDX.DXGI;
+using SharpDX.WIC;
 
-namespace SharpDX.WIC {
+namespace SharpDX.DirectXToolkit {
 
     [Flags]
     public enum LoadFlags {

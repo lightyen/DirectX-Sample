@@ -43,6 +43,7 @@ namespace Sample
             picker.FileTypeFilter.Add(".png");
             picker.FileTypeFilter.Add(".gif");
             picker.FileTypeFilter.Add(".bmp");
+            picker.FileTypeFilter.Add(".dds");
 
             picker.CommitButtonText = "送啦";
 

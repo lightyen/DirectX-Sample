@@ -19,11 +19,11 @@ namespace Sample {
             Loaded += (a, b) => {
 
                 if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
-                    xPanel.Initialize(new SharpDX.Size2(1920, 1080), this);
-                    xPanel.SetView((float)ActualWidth, (float)ActualHeight);
-                    Task.Run(async () => {
-                        await xPanel.Start();
-                    });
+                    //xPanel.Initialize(new SharpDX.Size2(1920, 1080), this);
+                    //xPanel.SetView((float)ActualWidth, (float)ActualHeight);
+                    //Task.Run(async () => {
+                    //    await xPanel.Start();
+                    //});
                 }
             };
 

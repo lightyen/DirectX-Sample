@@ -102,10 +102,11 @@
     <Compile Include="AppSwapChainPanel.xaml.cs">
       <DependentUpon>AppSwapChainPanel.xaml</DependentUpon>
     </Compile>
-    <Compile Include="DDSLoader.cs" />
+    <Compile Include="DirectXToolkit\DDSLoader.cs" />
     <Compile Include="DirectXPanel.cs" />
-    <Compile Include="DirectXToolkit.cs" />
-    <Compile Include="Extensions.cs" />
+    <Compile Include="DirectXToolkit\DirectXToolkit.cs" />
+    <Compile Include="DirectXToolkit\WICLoader.cs" />
+    <Compile Include="DirectXToolkit\Extensions.cs" />
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
