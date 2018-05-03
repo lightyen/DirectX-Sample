@@ -29,17 +29,18 @@ namespace SharpDX.DirectXToolkit {
             textureView = null;
             Guid containerFormatGuid;
             if (stream.CanRead) {
-                if (stream.Length < 104857600 && stream.Length >= 4) {
-                    var temp = new byte[4];
-                    stream.Read(temp, 0, 4);
+                if (stream.Length < 104857600 && stream.Length >= 8) {
+                    var temp = new byte[8];
+                    stream.Read(temp, 0, 8);
                     stream.Seek(0, SeekOrigin.Begin);
-                    if (temp[0] == 0xFF && temp[1] == 0xD8 && temp[2] == 0xFF && temp[3] == 0xE0) {
+                    // https://en.wikipedia.org/wiki/List_of_file_signatures
+                    if (temp[0] == 0xFF && temp[1] == 0xD8 && temp[2] == 0xFF) {
                         containerFormatGuid = ContainerFormatGuids.Jpeg;
-                    } else if (temp[0] == 0x89 && temp[1] == 0x50 && temp[2] == 0x4E && temp[3] == 0x47) {
+                    } else if (temp[0] == 0x89 && temp[1] == 0x50 && temp[2] == 0x4E && temp[3] == 0x47 && temp[4] == 0x0D && temp[5] == 0x0A && temp[6] == 0x1A && temp[7] == 0x0A) {
                         containerFormatGuid = ContainerFormatGuids.Png;
                     } else if (temp[0] == 0x42 && temp[1] == 0x4D) {
                         containerFormatGuid = ContainerFormatGuids.Bmp;
-                    } else if (temp[0] == 0x47 && temp[1] == 0x49 && temp[2] == 0x46 && temp[3] == 0x38) {
+                    } else if (temp[0] == 0x47 && temp[1] == 0x49 && temp[2] == 0x46 && temp[3] == 0x38 && (temp[4] == 0x37 || temp[4] == 0x39) && temp[5] == 0x61) {
                         containerFormatGuid = ContainerFormatGuids.Gif;
                     } else {
                         return;

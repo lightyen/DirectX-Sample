@@ -22,7 +22,7 @@ namespace SharpDX.DirectXToolkit {
             if (stream.CanRead) {
                 var br = new BinaryReader(stream);
                 if (stream.Length >= 4) {
-                    // magic
+                    // magic number
                     if (br.ReadInt32() == 0x20534444) {
                         GetDdsHeader(stream);
                         if (IsDDS) {
@@ -34,7 +34,7 @@ namespace SharpDX.DirectXToolkit {
             }
         }
 
-        void GetDdsHeader(Stream stream) {
+        private void GetDdsHeader(Stream stream) {
             int header_size = Marshal.SizeOf<DDS_HEADER>();
             if (stream.Length - stream.Position >= header_size) {
                 var br = new BinaryReader(stream);
@@ -48,7 +48,7 @@ namespace SharpDX.DirectXToolkit {
             }
         }
 
-        void GetDdsHeaderDXT10(Stream stream) {
+        private void GetDdsHeaderDXT10(Stream stream) {
             if (Header.IsDX10) {
                 int header_size = Marshal.SizeOf<DDS_HEADER_DXT10>();
                 if (stream.Length - stream.Position >= header_size) {
@@ -77,16 +77,12 @@ namespace SharpDX.DirectXToolkit {
                         case DDS_AlphaMode.Custom:
                             return mode;
                     }
-                } else if ((MakeFourCC('D', 'X', 'T', '2') == Header.ddsPixelFormat.fourCC)
-                      || (MakeFourCC('D', 'X', 'T', '4') == Header.ddsPixelFormat.fourCC)) {
+                } else if ((DirectXToolkit.MakeFourCC('D', 'X', 'T', '2') == Header.ddsPixelFormat.fourCC)
+                      || (DirectXToolkit.MakeFourCC('D', 'X', 'T', '4') == Header.ddsPixelFormat.fourCC)) {
                     return DDS_AlphaMode.Premultiplied;
                 }
                 return DDS_AlphaMode.Unknown;
             }
-        }
-
-        public static uint MakeFourCC(char a, char b, char c, char d) {
-            return (byte)a | (uint)(byte)b << 8 | (uint)(byte)c << 16 | (uint)(byte)d << 24;
         }
     }
 
@@ -467,6 +463,14 @@ namespace SharpDX.DirectXToolkit {
     }
 
     public static partial class DirectXToolkit {
+
+        public static uint MakeFourCC(char a, char b, char c, char d) {
+            if (BitConverter.IsLittleEndian) {
+                return (byte)a | (uint)(byte)b << 8 | (uint)(byte)c << 16 | (uint)(byte)d << 24;
+            } else {
+                return (byte)d | (uint)(byte)c << 8 | (uint)(byte)b << 16 | (uint)(byte)a << 24;
+            }
+        }
 
         public static void CreateDDSTextureFromStream(Direct3D11.Device d3dDevice, Stream stream, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
             if (stream.CanRead) {

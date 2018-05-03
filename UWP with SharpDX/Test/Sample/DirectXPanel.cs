@@ -66,7 +66,7 @@ namespace MyGame {
         RunMode Mode = RunMode.Deferred;
 
         bool TearingSupport = false; // 支援關閉垂直同步
-        bool Running = true;
+        bool Running = false;
 
         InputLayout VertexLayout;
 
@@ -241,13 +241,10 @@ namespace MyGame {
             context.OutputMerger.SetTargets(depthView, renderTargetView);
         }
 
-        DDS dds = null;
-
         private async Task LoadShader() {
 
             var VertexShaderByteCode = await LoadShaderCodeFromFile(new Uri("ms-appx:///Shader/VertexShader.cso"));
             var PixelShaderByteCode = await LoadShaderCodeFromFile(new Uri("ms-appx:///Shader/PixelShader.cso"));
-            dds = await LoadDDSFromFile(new Uri("ms-appx:///Shader/seafloor.dds"));
             vertexShader = new VertexShader(D3D11Device, VertexShaderByteCode);
             pixelShader = new PixelShader(D3D11Device, PixelShaderByteCode);
 
@@ -438,37 +435,44 @@ namespace MyGame {
 
         public async Task Start() {
 
-            ExitSem = new SemaphoreSlim(0, 1);
+            if (!Running) {
+                ExitSem = new SemaphoreSlim(0, 1);
 
-            await LoadResource();
+                await LoadResource();
 
-            DeviceContext deferredContext;
-            if (Mode == RunMode.Deferred) {
-                deferredContext = new DeviceContext(D3D11Device);
-                MainContext = deferredContext;
-            } else {
-                MainContext = D3D11Device.ImmediateContext;
+                DeviceContext deferredContext;
+                if (Mode == RunMode.Deferred) {
+                    deferredContext = new DeviceContext(D3D11Device);
+                    MainContext = deferredContext;
+                } else {
+                    MainContext = D3D11Device.ImmediateContext;
+                }
+
+                CreateRenderTargetView(MainContext);
+                SetViewport(MainContext);
+                PreparePipeline(MainContext);
+
+                Running = true;
+
+                while (Running) {
+                    Update();
+                    Render();
+                }
+
+                ExitSem.Release();
             }
-
-            CreateRenderTargetView(MainContext);
-            SetViewport(MainContext);
-            PreparePipeline(MainContext);
-
             
-
-            while (Running) {
-                Update();
-                Render();
-            }
-
-            ExitSem.Release();
         }
 
         public async Task Stop() {
             if (Running == true) {
                 Running = false;
                 Clear();
-                if (ExitSem != null) await ExitSem.WaitAsync();
+                if (ExitSem != null) {
+                    await ExitSem.WaitAsync();
+                    ExitSem.Dispose();
+                    ExitSem = null;
+                }
             }
         }
 

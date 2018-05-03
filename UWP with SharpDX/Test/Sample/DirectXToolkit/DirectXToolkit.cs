@@ -5,6 +5,13 @@ namespace SharpDX.DirectXToolkit {
 
     public static partial class DirectXToolkit {
         
+        /// <summary>
+        /// 從檔案建立貼圖資源
+        /// </summary>
+        /// <param name="device">Direct3D裝置</param>
+        /// <param name="file">目標檔案</param>
+        /// <param name="texture">回傳的貼圖</param>
+        /// <param name="textureView">回傳的貼圖資源</param>
         public static void CreateTextureFromFile(Direct3D11.Device device, Windows.Storage.StorageFile file, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
             texture = null;
             textureView = null;
@@ -17,6 +24,13 @@ namespace SharpDX.DirectXToolkit {
             }
         }
 
+        /// <summary>
+        /// 從<see cref="Stream"/>建立貼圖資源
+        /// </summary>
+        /// <param name="d3dDevice">Direct3D裝置</param>
+        /// <param name="stream">目標串流</param>
+        /// <param name="texture">回傳的貼圖</param>
+        /// <param name="textureView">回傳的貼圖資源</param>
         public static void CreateTextureFromStream(Direct3D11.Device d3dDevice, Stream stream, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
             texture = null;
             textureView = null;
