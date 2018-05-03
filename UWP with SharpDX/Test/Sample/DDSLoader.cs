@@ -2,18 +2,20 @@
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace SharpDX.Direct3D11 {
+namespace SharpDX.DirectXTookit {
     public class DDS {
         // https://msdn.microsoft.com/zh-tw/library/windows/desktop/dn424129(v=vs.85).aspx
         // https://msdn.microsoft.com/en-us/library/windows/desktop/bb943991(v=vs.85).aspx
         // https://blog.csdn.net/puppet_master/article/details/50186613
         public bool IsDDS = false;
         public DDS_HEADER Header;
-        public bool IsDX10 = false;
-        public DDS_HEADER_DXT10 HeaderDXT10;
+        public DDS_HEADER_DXT10? HeaderDXT10;
         public byte[] Data;
 
+        public const uint CubeMap = 0x00000200;
+
         public DDS(Stream stream) {
+
             if (stream.CanRead) {
                 var br = new BinaryReader(stream);
                 if (stream.Length >= 4) {
@@ -44,9 +46,7 @@ namespace SharpDX.Direct3D11 {
         }
 
         void GetDdsHeaderDXT10(Stream stream) {
-            // dwFourCC == "DX10"
-            if (Header.ddsPixelFormat.flags.HasFlag(DDS_PIXELFORMAT_FLAGS.FourCC) && Header.ddsPixelFormat.fourCC == 0x30315844) {
-                IsDX10 = true;
+            if (Header.IsDX10) {
                 int header_size = Marshal.SizeOf<DDS_HEADER_DXT10>();
                 if (stream.Length - stream.Position >= header_size) {
                     var br = new BinaryReader(stream);
@@ -57,14 +57,40 @@ namespace SharpDX.Direct3D11 {
                         }
                     }
                 }
+            } else {
+                HeaderDXT10 = null;
             }
+        }
+
+        public DDS_AlphaMode AlphaMode {
+            get {
+                if (Header.IsDX10) {
+                    var d3d10ext = HeaderDXT10.Value;
+                    var mode = d3d10ext.miscFlags2 & (DDS_AlphaMode)0x7;
+                    switch (mode) {
+                        case DDS_AlphaMode.Straight:
+                        case DDS_AlphaMode.Premultiplied:
+                        case DDS_AlphaMode.Opaque:
+                        case DDS_AlphaMode.Custom:
+                            return mode;
+                    }
+                } else if ((MakeFourCC('D', 'X', 'T', '2') == Header.ddsPixelFormat.fourCC)
+                      || (MakeFourCC('D', 'X', 'T', '4') == Header.ddsPixelFormat.fourCC)) {
+                    return DDS_AlphaMode.Premultiplied;
+                }
+                return DDS_AlphaMode.Unknown;
+            }
+        }
+
+        public static uint MakeFourCC(char a, char b, char c, char d) {
+            return (byte)a | (uint)(byte)b << 8 | (uint)(byte)c << 16 | (uint)(byte)d << 24;
         }
     }
 
     [StructLayout(LayoutKind.Explicit)]
     public struct DDS_HEADER {
         [FieldOffset(0)] public uint size;
-        [FieldOffset(4)] public DDS_HEADER_FLAGS flags;
+        [FieldOffset(4)] public DDS_Header flags;
         [FieldOffset(8)] public uint height;
         [FieldOffset(12)] public uint width;
         [FieldOffset(16)] public uint pitchOrLinearSize;
@@ -72,11 +98,27 @@ namespace SharpDX.Direct3D11 {
         [FieldOffset(24)] public uint mipMapCount;
         //uint[] dwReserved1;
         [FieldOffset(72)] public DDS_PIXELFORMAT ddsPixelFormat;
-        [FieldOffset(104)] public uint Caps;
-        [FieldOffset(108)] public uint Caps2;
-        [FieldOffset(112)] public uint Caps3;
-        [FieldOffset(116)] public uint Caps4;
+        [FieldOffset(104)] public DDS_Caps Caps;
+        [FieldOffset(108)] public DDS_Caps2 Caps2;
+        /// <summary>
+        /// Unused.
+        /// </summary>
+        [FieldOffset(112)] private uint Caps3;
+        /// <summary>
+        /// Unused.
+        /// </summary>
+        [FieldOffset(116)] private uint Caps4;
+        /// <summary>
+        /// Unused.
+        /// </summary>
         [FieldOffset(120)] private uint Reserved2;
+
+        public bool IsDX10 {
+            get {
+                // dwFourCC == "DX10"
+                return ddsPixelFormat.flags.HasFlag(DDS_PixelFormat.FourCC) && ddsPixelFormat.fourCC == 0x30315844;
+            }
+        }
     }
 
     [StructLayout(LayoutKind.Explicit)]
@@ -85,13 +127,13 @@ namespace SharpDX.Direct3D11 {
         [FieldOffset(4)] public SharpDX.Direct3D11.ResourceDimension resourceDimension;
         [FieldOffset(8)] public SharpDX.Direct3D11.ResourceOptionFlags miscFlag;
         [FieldOffset(12)] public uint arraySize;
-        [FieldOffset(16)] public DDS_ALPHA_MODE miscFlags2;
+        [FieldOffset(16)] public DDS_AlphaMode miscFlags2;
     }
 
     [StructLayout(LayoutKind.Explicit)]
     public struct DDS_PIXELFORMAT {
         [FieldOffset(0)] public uint size;
-        [FieldOffset(4)] public DDS_PIXELFORMAT_FLAGS flags;
+        [FieldOffset(4)] public DDS_PixelFormat flags;
         [FieldOffset(8)] public uint fourCC;
         [FieldOffset(12)] public uint RGBBitCount;
         [FieldOffset(16)] public uint RBitMask;
@@ -105,7 +147,7 @@ namespace SharpDX.Direct3D11 {
 
         public DXGI.Format Format {
             get {
-                if (flags.HasFlag(DDS_PIXELFORMAT_FLAGS.RGB)) {
+                if (flags.HasFlag(DDS_PixelFormat.RGB)) {
 
                     // Note that sRGB formats are written using the "DX10" extended header
 
@@ -171,7 +213,7 @@ namespace SharpDX.Direct3D11 {
 
                     }
 
-                } else if (flags.HasFlag(DDS_PIXELFORMAT_FLAGS.Luminance)) {
+                } else if (flags.HasFlag(DDS_PixelFormat.Luminance)) {
                     if (8 == RGBBitCount) {
                         if (IsBitMask(0x000000ff, 0x00000000, 0x00000000, 0x00000000)) {
                             return DXGI.Format.R8_UNorm; // D3DX10/11 writes this out as DX10 extension
@@ -188,11 +230,11 @@ namespace SharpDX.Direct3D11 {
                             return DXGI.Format.R8G8_UNorm; // D3DX10/11 writes this out as DX10 extension
                         }
                     }
-                } else if (flags.HasFlag(DDS_PIXELFORMAT_FLAGS.Alpha)) {
+                } else if (flags.HasFlag(DDS_PixelFormat.Alpha)) {
                     if (8 == RGBBitCount) {
                         return DXGI.Format.A8_UNorm;
                     }
-                } else if (flags.HasFlag(DDS_PIXELFORMAT_FLAGS.FourCC)) {
+                } else if (flags.HasFlag(DDS_PixelFormat.FourCC)) {
 
                     uint MakeFourCC(char a, char b, char c, char d) {
                         return (byte)a | ((uint)(byte)b << 8) | ((uint)(byte)c << 16) | ((uint)(byte)d << 24);
@@ -284,7 +326,7 @@ namespace SharpDX.Direct3D11 {
     }
 
     [Flags]
-    public enum DDS_HEADER_FLAGS {
+    public enum DDS_Header {
         /// <summary>
         /// Required in every .dds file.
         /// </summary>
@@ -324,7 +366,7 @@ namespace SharpDX.Direct3D11 {
     }
 
     [Flags]
-    public enum DDS_PIXELFORMAT_FLAGS {
+    public enum DDS_PixelFormat {
         /// <summary>
         /// Texture contains alpha data; dwRGBAlphaBitMask contains valid data.
         /// </summary>
@@ -354,11 +396,70 @@ namespace SharpDX.Direct3D11 {
     }
 
     [Flags]
-    public enum DDS_ALPHA_MODE {
+    public enum DDS_AlphaMode {
         Unknown = 0,
         Straight = 1,
         Premultiplied = 2,
         Opaque = 3,
         Custom = 4,
     };
+
+    [Flags]
+    public enum DDS_Caps {
+        Complex = 0x8,
+        MipMap = 0x400000,
+        Texture = 0x1000,
+    }
+
+    [Flags]
+    public enum DDS_Caps2 {
+        /// <summary>
+        /// Required for a cube map.
+        /// </summary>
+        CubeMap = 0x200,
+        /// <summary>
+        /// Required when these surfaces are stored in a cube map.	
+        /// </summary>
+        PositiveX = 0x400,
+        /// <summary>
+        /// Required when these surfaces are stored in a cube map.	
+        /// </summary>
+        NegativeX = 0x800,
+        /// <summary>
+        /// Required when these surfaces are stored in a cube map.	
+        /// </summary>
+        PositiveY = 0x1000,
+        /// <summary>
+        /// Required when these surfaces are stored in a cube map.	
+        /// </summary>
+        NegativeY = 0x2000,
+        /// <summary>
+        /// Required when these surfaces are stored in a cube map.	
+        /// </summary>
+        PositiveZ = 0x4000,
+        /// <summary>
+        /// Required when these surfaces are stored in a cube map.
+        /// </summary>
+        NegativeZ = 0x8000,
+        /// <summary>
+        /// Required for a volume texture.
+        /// </summary>
+        Volume = 0x200000,
+    }
+
+    [Flags]
+    public enum DDS_CubeMap {
+        CubeMap = DDS_Caps2.CubeMap,
+        PositiveX = DDS_Caps2.CubeMap | DDS_Caps2.PositiveX,
+        NegativeX = DDS_Caps2.CubeMap | DDS_Caps2.NegativeX,
+        PositiveY = DDS_Caps2.CubeMap | DDS_Caps2.PositiveY,
+        NegativeY = DDS_Caps2.CubeMap | DDS_Caps2.NegativeY,
+        PositiveZ = DDS_Caps2.CubeMap | DDS_Caps2.PositiveZ,
+        NegativeZ = DDS_Caps2.CubeMap | DDS_Caps2.NegativeZ,
+        AllFaces = PositiveX | NegativeX | PositiveY | NegativeY | PositiveZ | NegativeZ,
+    }
+
+    enum DDS_MISC_FLAGS2 {
+        DDS_MISC_FLAGS2_ALPHA_MODE_MASK = 0x7,
+    }
 }

@@ -132,7 +132,7 @@ namespace SharpDX.WIC {
             }
         }
 
-        public static uint BitPerPixel(this Format format) {
+        public static int BitPerPixel(this Format format) {
             switch (format) {
                 case Format.R32G32B32A32_Typeless:
                 case Format.R32G32B32A32_Float:

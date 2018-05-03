@@ -208,9 +208,6 @@
     <PackageReference Include="SharpDX.Direct2D1">
       <Version>4.0.1</Version>
     </PackageReference>
-    <PackageReference Include="SharpDX.Direct3D10">
-      <Version>4.0.1</Version>
-    </PackageReference>
     <PackageReference Include="SharpDX.Direct3D11">
       <Version>4.0.1</Version>
     </PackageReference>
