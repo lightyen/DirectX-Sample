@@ -4,6 +4,7 @@ using SharpDX.DXGI;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using System.Runtime.InteropServices;
+using SharpDX.Multimedia;
 
 namespace SharpDX.DirectXToolkit {
     public class DDS : IDisposable {
@@ -165,7 +166,7 @@ namespace SharpDX.DirectXToolkit {
     public struct DDS_PIXELFORMAT {
         public uint size;
         public DDS_PixelFormat flags;
-        public uint fourCC;
+        public FourCC fourCC;
         public uint RGBBitCount;
         public uint RBitMask;
         public uint GBitMask;
@@ -267,64 +268,60 @@ namespace SharpDX.DirectXToolkit {
                     }
                 } else if (flags.HasFlag(DDS_PixelFormat.FourCC)) {
 
-                    uint MakeFourCC(char a, char b, char c, char d) {
-                        return (byte)a | ((uint)(byte)b << 8) | ((uint)(byte)c << 16) | ((uint)(byte)d << 24);
-                    }
-
-                    if (MakeFourCC('D', 'X', 'T', '1') == fourCC) {
+                    if (new FourCC("DXT1") == fourCC) {
                         return DXGI.Format.BC1_UNorm;
                     }
-                    if (MakeFourCC('D', 'X', 'T', '3') == fourCC) {
+                    if (new FourCC("DXT3") == fourCC) {
                         return DXGI.Format.BC2_UNorm;
                     }
-                    if (MakeFourCC('D', 'X', 'T', '5') == fourCC) {
+                    if (new FourCC("DXT5") == fourCC) {
                         return DXGI.Format.BC3_UNorm;
                     }
 
                     // While pre-mulitplied alpha isn't directly supported by the DXGI formats,
                     // they are basically the same as these BC formats so they can be mapped
-                    if (MakeFourCC('D', 'X', 'T', '2') == fourCC) {
+                    if (new FourCC("DXT2") == fourCC) {
                         return DXGI.Format.BC2_UNorm;
                     }
-                    if (MakeFourCC('D', 'X', 'T', '4') == fourCC) {
+                    if (new FourCC("DXT4") == fourCC) {
                         return DXGI.Format.BC3_UNorm;
                     }
 
-                    if (MakeFourCC('A', 'T', 'I', '1') == fourCC) {
+                    if (new FourCC('A', 'T', 'I', '1') == fourCC) {
                         return DXGI.Format.BC4_UNorm;
                     }
-                    if (MakeFourCC('B', 'C', '4', 'U') == fourCC) {
+                    if (new FourCC('B', 'C', '4', 'U') == fourCC) {
                         return DXGI.Format.BC4_UNorm;
                     }
-                    if (MakeFourCC('B', 'C', '4', 'S') == fourCC) {
+                    if (new FourCC('B', 'C', '4', 'S') == fourCC) {
                         return DXGI.Format.BC4_SNorm;
                     }
 
-                    if (MakeFourCC('A', 'T', 'I', '2') == fourCC) {
+                    if (new FourCC('A', 'T', 'I', '2') == fourCC) {
                         return DXGI.Format.BC5_UNorm;
                     }
-                    if (MakeFourCC('B', 'C', '5', 'U') == fourCC) {
+                    if (new FourCC('B', 'C', '5', 'U') == fourCC) {
                         return DXGI.Format.BC5_UNorm;
                     }
-                    if (MakeFourCC('B', 'C', '5', 'S') == fourCC) {
+                    if (new FourCC('B', 'C', '5', 'S') == fourCC) {
                         return DXGI.Format.BC5_SNorm;
                     }
 
                     // BC6H and BC7 are written using the "DX10" extended header
 
-                    if (MakeFourCC('R', 'G', 'B', 'G') == fourCC) {
+                    if (new FourCC('R', 'G', 'B', 'G') == fourCC) {
                         return DXGI.Format.R8G8_B8G8_UNorm;
                     }
-                    if (MakeFourCC('G', 'R', 'G', 'B') == fourCC) {
+                    if (new FourCC('G', 'R', 'G', 'B') == fourCC) {
                         return DXGI.Format.G8R8_G8B8_UNorm;
                     }
 
-                    if (MakeFourCC('Y', 'U', 'Y', '2') == fourCC) {
+                    if (new FourCC('Y', 'U', 'Y', '2') == fourCC) {
                         return DXGI.Format.YUY2;
                     }
 
                     // Check for D3DFORMAT enums being set here
-                    switch (fourCC) {
+                    switch ((uint)fourCC) {
                         case 36: // D3DFMT_A16B16G16R16
                             return DXGI.Format.R16G16B16A16_UNorm;
 
