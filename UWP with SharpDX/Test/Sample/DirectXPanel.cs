@@ -270,7 +270,7 @@ namespace MyGame {
                         var dataBytes = qrCode.GetGraphic(40);
                         ShaderResourceView textureView = null;
                         using (var mmStream = new MemoryStream(dataBytes)) {
-                            DirectXToolkit.CreateWICTextureFromStream(device, mmStream, out _, out textureView);
+                            DirectXToolkit.CreateTexture(device, mmStream, out _, out textureView);
                         }
                         return textureView;
                     }
@@ -291,7 +291,7 @@ namespace MyGame {
         public void UpdateFile(StorageFile file) {
             if (CreateTextureTask == null) {
                 ShaderResourceView func(StorageFile f, SharpDX.Direct3D11.Device device) {
-                    DirectXToolkit.CreateTextureFromFile(device, f, out _, out var textureView);
+                    DirectXToolkit.CreateTexture(device, f, out _, out var textureView);
                     return textureView;
                 }
 
@@ -312,7 +312,7 @@ namespace MyGame {
             }
 
             if (CreateTextureTask != null && CreateTextureTask.IsCompletedSuccessfully) {
-                var result = CreateTextureTask.Result;
+                ShaderResourceView result = CreateTextureTask.Result;
                 CreateTextureTask = null;
                 if (result != null) {
                     MainContext?.PixelShader.SetShaderResource(0, result);

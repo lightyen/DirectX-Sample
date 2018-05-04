@@ -6,14 +6,25 @@ using SharpDX.Direct3D11;
 using System.Runtime.InteropServices;
 
 namespace SharpDX.DirectXToolkit {
-    public class DDS {
+    public class DDS : IDisposable {
         // https://msdn.microsoft.com/zh-tw/library/windows/desktop/dn424129(v=vs.85).aspx
         // https://msdn.microsoft.com/en-us/library/windows/desktop/bb943991(v=vs.85).aspx
         // https://blog.csdn.net/puppet_master/article/details/50186613
+
         public bool IsDDS = false;
-        public DDS_HEADER Header;
-        public DDS_HEADER_DXT10? HeaderDXT10;
-        public byte[] Data;
+
+        public DDS_HEADER Header {
+            get; private set;
+        }
+
+        public DDS_HEADER_DXT10? HeaderDXT10 {
+            get; private set;
+        }
+
+        private GCHandle dataHandle;
+
+        public IntPtr Data { get; private set; }
+        public int DataLength { get; private set; }
 
         public const uint CubeMap = 0x00000200;
 
@@ -21,45 +32,61 @@ namespace SharpDX.DirectXToolkit {
 
             if (stream.CanRead) {
                 var br = new BinaryReader(stream);
-                if (stream.Length >= 4) {
-                    // magic number
-                    if (br.ReadInt32() == 0x20534444) {
-                        GetDdsHeader(stream);
-                        if (IsDDS) {
-                            GetDdsHeaderDXT10(stream);
-                            Data = br.ReadBytes(Convert.ToInt32(stream.Length - stream.Position));
-                        }
+                if (stream.Length > Marshal.SizeOf<DDS_HEADER>()) {
+                    GetDdsHeader(stream);
+                    if (IsDDS) {
+                        GetDdsHeaderDXT10();
+                        Data += Marshal.SizeOf<DDS_HEADER>();
+                        DataLength -= Marshal.SizeOf<DDS_HEADER>();
+                    }
+
+                    if (HeaderDXT10.HasValue) {
+                        Data += Marshal.SizeOf<DDS_HEADER_DXT10>();
+                        DataLength -= Marshal.SizeOf<DDS_HEADER_DXT10>();
                     }
                 }
+            }
+        }
+
+        private bool disposed = false;
+
+        protected virtual void Dispose(bool disposing) {
+            if (!disposed) {
+                if (disposing) {
+                    dataHandle.Free();
+                }
+                Data = IntPtr.Zero;
+                disposed = true;
+            }
+        }
+
+        public void Dispose() {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~DDS() {
+            if (dataHandle.IsAllocated) {
+                dataHandle.Free();
             }
         }
 
         private void GetDdsHeader(Stream stream) {
-            int header_size = Marshal.SizeOf<DDS_HEADER>();
-            if (stream.Length - stream.Position >= header_size) {
-                var br = new BinaryReader(stream);
-                var data = br.ReadBytes(header_size);
-                unsafe {
-                    fixed (byte* ptr = &data[0]) {
-                        Header = *(DDS_HEADER*)ptr;
-                    }
-                }
-                if (Header.size == Marshal.SizeOf<DDS_HEADER>()) IsDDS = true;
+            var br = new BinaryReader(stream);
+            var data = br.ReadBytes((int)stream.Length);
+            DataLength = data.Length;
+            dataHandle = GCHandle.Alloc(data, GCHandleType.Pinned);
+            Data = dataHandle.AddrOfPinnedObject();
+            Header = Marshal.PtrToStructure<DDS_HEADER>(Data);
+            // magic number
+            if (Header.magic == 0x20534444 && Header.size == Marshal.SizeOf<DDS_HEADER>() - 4) {
+                IsDDS = true;
             }
         }
 
-        private void GetDdsHeaderDXT10(Stream stream) {
+        private void GetDdsHeaderDXT10() {
             if (Header.IsDX10) {
-                int header_size = Marshal.SizeOf<DDS_HEADER_DXT10>();
-                if (stream.Length - stream.Position >= header_size) {
-                    var br = new BinaryReader(stream);
-                    var data = br.ReadBytes(header_size);
-                    unsafe {
-                        fixed (byte* ptr = &data[0]) {
-                            HeaderDXT10 = *(DDS_HEADER_DXT10*)ptr;
-                        }
-                    }
-                }
+                HeaderDXT10 = Marshal.PtrToStructure<DDS_HEADER_DXT10>(Data + Marshal.SizeOf<DDS_HEADER>());
             } else {
                 HeaderDXT10 = null;
             }
@@ -86,31 +113,36 @@ namespace SharpDX.DirectXToolkit {
         }
     }
 
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Sequential)]
     public struct DDS_HEADER {
-        [FieldOffset(0)] public uint size;
-        [FieldOffset(4)] public DDS_Header flags;
-        [FieldOffset(8)] public uint height;
-        [FieldOffset(12)] public uint width;
-        [FieldOffset(16)] public uint pitchOrLinearSize;
-        [FieldOffset(20)] public uint depth;
-        [FieldOffset(24)] public uint mipMapCount;
-        //uint[] dwReserved1;
-        [FieldOffset(72)] public DDS_PIXELFORMAT ddsPixelFormat;
-        [FieldOffset(104)] public DDS_Caps Caps;
-        [FieldOffset(108)] public DDS_CubeMap Caps2;
+        public uint magic;
+        public uint size;
+        public DDS_Header flags;
+        public uint height;
+        public uint width;
+        public uint pitchOrLinearSize;
+        public uint depth;
+        public uint mipMapCount;
         /// <summary>
         /// Unused.
         /// </summary>
-        [FieldOffset(112)] private uint Caps3;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 11)]
+        private uint[] dwReserved1;
+        public DDS_PIXELFORMAT ddsPixelFormat;
+        public DDS_Caps Caps;
+        public DDS_CubeMap Caps2;
         /// <summary>
         /// Unused.
         /// </summary>
-        [FieldOffset(116)] private uint Caps4;
+        private uint Caps3;
         /// <summary>
         /// Unused.
         /// </summary>
-        [FieldOffset(120)] private uint Reserved2;
+        private uint Caps4;
+        /// <summary>
+        /// Unused.
+        /// </summary>
+        private uint Reserved2;
 
         public bool IsDX10 {
             get {
@@ -120,25 +152,25 @@ namespace SharpDX.DirectXToolkit {
         }
     }
 
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Sequential)]
     public struct DDS_HEADER_DXT10 {
-        [FieldOffset(0)] public SharpDX.DXGI.Format dxgiFormat;
-        [FieldOffset(4)] public SharpDX.Direct3D11.ResourceDimension resourceDimension;
-        [FieldOffset(8)] public SharpDX.Direct3D11.ResourceOptionFlags miscFlag;
-        [FieldOffset(12)] public uint arraySize;
-        [FieldOffset(16)] public DDS_AlphaMode miscFlags2;
+        public SharpDX.DXGI.Format dxgiFormat;
+        public SharpDX.Direct3D11.ResourceDimension resourceDimension;
+        public SharpDX.Direct3D11.ResourceOptionFlags miscFlag;
+        public uint arraySize;
+        public DDS_AlphaMode miscFlags2;
     }
 
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Sequential)]
     public struct DDS_PIXELFORMAT {
-        [FieldOffset(0)] public uint size;
-        [FieldOffset(4)] public DDS_PixelFormat flags;
-        [FieldOffset(8)] public uint fourCC;
-        [FieldOffset(12)] public uint RGBBitCount;
-        [FieldOffset(16)] public uint RBitMask;
-        [FieldOffset(20)] public uint GBitMask;
-        [FieldOffset(24)] public uint BBitMask;
-        [FieldOffset(28)] public uint ABitMask;
+        public uint size;
+        public DDS_PixelFormat flags;
+        public uint fourCC;
+        public uint RGBBitCount;
+        public uint RBitMask;
+        public uint GBitMask;
+        public uint BBitMask;
+        public uint ABitMask;
 
         private bool IsBitMask(uint r, uint g, uint b, uint a) {
             return RBitMask == r && GBitMask == g && BBitMask == b && ABitMask == a;
@@ -472,10 +504,11 @@ namespace SharpDX.DirectXToolkit {
             }
         }
 
-        public static void CreateDDSTextureFromStream(Direct3D11.Device d3dDevice, Stream stream, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
+        public static void CreateDDSTextureFromStream(Direct3D11.Device d3dDevice, Stream stream, Direct3D11.DeviceContext deviceContext, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
             if (stream.CanRead) {
-                var dds = new DDS(stream);
-                CreateDDSTextureFromMemory(d3dDevice, dds, out texture, out textureView);
+                using (var dds = new DDS(stream)) {
+                    CreateDDSTextureFromMemory(d3dDevice, dds, out texture, out textureView);
+                }
             } else {
                 texture = null;
                 textureView = null;
@@ -511,12 +544,9 @@ namespace SharpDX.DirectXToolkit {
             if (d3dDevice == null) throw new ArgumentNullException("d3dDevice");
             if (dds == null) throw new ArgumentNullException("dds");
 
-            IntPtr ddsData = IntPtr.Zero;
-            GCHandle handle = GCHandle.Alloc(dds.Data, GCHandleType.Pinned);
-
             try {
-                ddsData = handle.AddrOfPinnedObject();
-                var result = CreateTextureFromDDS(d3dDevice, null, dds.Header, dds.HeaderDXT10, ddsData, dds.Data.Length, maxsize, usage, bindFlags, cpuAccessFlags, miscFlags, forceSRGB, out texture, out textureView);
+                
+                var result = CreateTextureFromDDS(d3dDevice, null, dds.Header, dds.HeaderDXT10, dds.Data, dds.DataLength, maxsize, usage, bindFlags, cpuAccessFlags, miscFlags, forceSRGB, out texture, out textureView);
                 if (result.Success) {
                     texture.DebugName = "DDSTextureLoader";
                     textureView.DebugName = "DDSTextureLoader";
@@ -524,7 +554,7 @@ namespace SharpDX.DirectXToolkit {
                 }
 
             } finally {
-                handle.Free();
+                
             }
         }
 

@@ -24,7 +24,7 @@ namespace SharpDX.DirectXToolkit {
         /// </summary>
         /// <param name="stream">串流</param>
         /// <param name="device">D3D Device</param>
-        public static void CreateWICTextureFromStream(Direct3D11.Device device, Stream stream, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
+        public static void CreateWICTextureFromStream(Direct3D11.Device device, Stream stream, Direct3D11.DeviceContext deviceContext, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
             texture = null;
             textureView = null;
             Guid containerFormatGuid;
