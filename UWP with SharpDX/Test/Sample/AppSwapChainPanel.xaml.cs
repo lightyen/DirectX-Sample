@@ -13,20 +13,18 @@ namespace Sample {
     /// </summary>
     public sealed partial class AppSwapChainPanel : SwapChainPanel {
 
+        private bool initialized = false;
+
         public AppSwapChainPanel() {
             InitializeComponent();
 
             Loaded += (a, b) => {
-
                 if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
                     xPanel.Initialize(new SharpDX.Size2(1920, 1080), this);
                     xPanel.SetView((float)ActualWidth, (float)ActualHeight);
-                    Task.Run(async () => {
-                        await xPanel.Start();
-                    });
+                    initialized = true;
                 }
             };
-
 
             var window = Windows.UI.Core.CoreWindow.GetForCurrentThread();
             window.KeyDown += async (o, e) => {
@@ -38,11 +36,26 @@ namespace Sample {
                 }
             };
 
+            window.PointerPressed += (o, e) => {
+                this.Start();
+            };
+
             SizeChanged += (o, e) => {
                 if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
                     xPanel?.SetView((float)ActualWidth, (float)ActualHeight);
                 }
             };
+        }
+
+        public void Start() {
+            if (!initialized) return;
+            if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
+                if (!xPanel.Running)
+                Task.Run(async () => {
+                    await xPanel.Start();
+                });
+            }
+            
         }
     }
 

@@ -15,6 +15,7 @@
             <Button Height="50" HorizontalAlignment="Stretch" VerticalAlignment="Top" Click="Button_Click" />
             <TextBox Margin="0,20,0,20" Text="{Binding QRMessage, Mode=TwoWay}" Height="50" />
             <Button Height="50" HorizontalAlignment="Stretch" Click="OpenFile_Click" />
+            <Button Height="50" Margin="0,10,0,10" HorizontalAlignment="Stretch" Click="SaveFile_Click" />
         </StackPanel>
         <local:AppSwapChainPanel x:Name="AppSwapChainPanel" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
     </Grid>

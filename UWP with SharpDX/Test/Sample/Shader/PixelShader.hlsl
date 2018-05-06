@@ -10,5 +10,5 @@ struct VS_OUT
 
 float4 main(VS_OUT input) : SV_TARGET
 {
-    return input.color * texture0.Sample(samLinear, input.tex);
+    return texture0.Sample(samLinear, input.tex);
 }

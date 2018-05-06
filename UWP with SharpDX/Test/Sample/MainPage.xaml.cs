@@ -17,7 +17,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using QRCoder;
-using Windows.Storage.Streams;
+using Windows.Storage.Pickers;
 using Windows.UI.Xaml.Media.Imaging;
 using MyGame;
 
@@ -27,26 +27,33 @@ namespace Sample
 
         public event PropertyChangedEventHandler PropertyChanged;
         private string msg;
-        private Windows.Storage.Pickers.FileOpenPicker picker;
+        private FileOpenPicker open_picker;
+        private FileSavePicker save_picker;
 
         public MainPage() {
 
             this.InitializeComponent();
 
-            picker = new Windows.Storage.Pickers.FileOpenPicker {
-                ViewMode = Windows.Storage.Pickers.PickerViewMode.Thumbnail,
-                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.PicturesLibrary
+            open_picker = new FileOpenPicker {
+                ViewMode = PickerViewMode.Thumbnail,
+                SuggestedStartLocation = PickerLocationId.PicturesLibrary
             };
 
-            picker.FileTypeFilter.Add(".jpg");
-            picker.FileTypeFilter.Add(".jpeg");
-            picker.FileTypeFilter.Add(".png");
-            picker.FileTypeFilter.Add(".gif");
-            picker.FileTypeFilter.Add(".bmp");
-            picker.FileTypeFilter.Add(".dds");
+            open_picker.FileTypeFilter.Add(".jpg");
+            open_picker.FileTypeFilter.Add(".jpeg");
+            open_picker.FileTypeFilter.Add(".png");
+            open_picker.FileTypeFilter.Add(".gif");
+            open_picker.FileTypeFilter.Add(".bmp");
+            open_picker.FileTypeFilter.Add(".dds");
+            open_picker.CommitButtonText = "送啦";
 
-            picker.CommitButtonText = "送啦";
+            save_picker = new FileSavePicker {
+                SuggestedStartLocation = PickerLocationId.PicturesLibrary
+            };
 
+            save_picker.FileTypeChoices.Add("PNG", new List<string>() { ".png" });
+            save_picker.FileTypeChoices.Add("JPG", new List<string>() { ".jpg" });
+            save_picker.SuggestedFileName = "test";
             this.DataContext = this;
 
             QRMessage = "https://github.com/lightyen/DirectX-Sample";
@@ -76,9 +83,17 @@ namespace Sample
 
         private async void OpenFile_Click(object sender, RoutedEventArgs e) {
 
-            if (await picker.PickSingleFileAsync() is Windows.Storage.StorageFile file) {
+            if (await open_picker.PickSingleFileAsync() is Windows.Storage.StorageFile file) {
                 if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
                     xPanel.UpdateFile(file);
+                }
+            }
+        }
+
+        private async void SaveFile_Click(object sender, RoutedEventArgs e) {
+            if (await save_picker.PickSaveFileAsync() is Windows.Storage.StorageFile file) {
+                if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
+                    xPanel.SaveFile(file);
                 }
             }
         }

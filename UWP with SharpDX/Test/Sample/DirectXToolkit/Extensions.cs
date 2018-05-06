@@ -98,11 +98,36 @@ namespace SharpDX.DirectXToolkit {
         };
 
 
-        public static Format ConvertToDXGIFormat(this Guid WICFormat) {
+        public static Format ConvertWICToDXGIFormat(this Guid WICFormat) {
             for (int i = 0; i < WICFormats.Length; i++) {
                 if (WICFormat == WICFormats[i].PixelFormat) return WICFormats[i].Format;
             }
             return Format.Unknown;
+        }
+
+        public static Guid ConvertDXGIToWICFormat(this Format DXGIFormat) {
+            Guid target = Guid.Empty;
+            switch (DXGIFormat) {
+                case Format.R32G32B32A32_Float: target = PixelFormat.Format128bppRGBAFloat; break;
+                case Format.R16G16B16A16_Float: target = PixelFormat.Format64bppRGBAHalf; break;
+                case Format.R16G16B16A16_UNorm: target = PixelFormat.Format64bppRGBA; break;
+                case Format.R10G10B10_Xr_Bias_A2_UNorm: target = PixelFormat.Format32bppRGBA1010102XR; break;
+                case Format.R10G10B10A2_UNorm: target = PixelFormat.Format32bppRGBA1010102; break;
+                case Format.B5G5R5A1_UNorm: target = PixelFormat.Format16bppBGRA5551; break;
+                case Format.B5G6R5_UNorm: target = PixelFormat.Format16bppBGR565; break;
+                case Format.R32_Float: target = PixelFormat.Format32bppGrayFloat; break;
+                case Format.R16_Float: target = PixelFormat.Format16bppGrayHalf; break;
+                case Format.R16_UNorm: target = PixelFormat.Format16bppGray; break;
+                case Format.R8_UNorm: target = PixelFormat.Format8bppGray; break;
+                case Format.A8_UNorm: target = PixelFormat.Format8bppAlpha; break;
+                case Format.R8G8B8A8_UNorm: target = PixelFormat.Format32bppRGBA; break;
+                case Format.R8G8B8A8_UNorm_SRgb: target = PixelFormat.Format32bppRGBA; break;
+                case Format.B8G8R8A8_UNorm: target = PixelFormat.Format32bppBGRA; break;
+                case Format.B8G8R8A8_UNorm_SRgb: target = PixelFormat.Format32bppBGRA; break;
+                case Format.B8G8R8X8_UNorm: target = PixelFormat.Format32bppBGR; break;
+                case Format.B8G8R8X8_UNorm_SRgb: target = PixelFormat.Format32bppBGR; break;
+            }
+            return target;
         }
 
         public static Guid ConvertToNearest(this Guid source) {
@@ -384,6 +409,31 @@ namespace SharpDX.DirectXToolkit {
             }
             public Guid SourceFormat { get; private set; }
             public Guid TargetFormat { get; private set; }
+        }
+
+        public static DXGI.Format EnsureNotTypeless(this DXGI.Format format) {
+            switch (format) {
+                case DXGI.Format.R32G32B32A32_Typeless: return DXGI.Format.R32G32B32A32_Float;
+                case DXGI.Format.R32G32B32_Typeless: return DXGI.Format.R32G32B32_Float;
+                case DXGI.Format.R16G16B16A16_Typeless: return DXGI.Format.R16G16B16A16_UNorm;
+                case DXGI.Format.R32G32_Typeless: return DXGI.Format.R32G32_Float;
+                case DXGI.Format.R10G10B10A2_Typeless: return DXGI.Format.R10G10B10A2_UNorm;
+                case DXGI.Format.R8G8B8A8_Typeless: return DXGI.Format.R8G8B8A8_UNorm;
+                case DXGI.Format.R16G16_Typeless: return DXGI.Format.R16G16_UNorm;
+                case DXGI.Format.R32_Typeless: return DXGI.Format.R32_Float;
+                case DXGI.Format.R8G8_Typeless: return DXGI.Format.R8G8_UNorm;
+                case DXGI.Format.R16_Typeless: return DXGI.Format.R16_UNorm;
+                case DXGI.Format.R8_Typeless: return DXGI.Format.R8_UNorm;
+                case DXGI.Format.BC1_Typeless: return DXGI.Format.BC1_UNorm;
+                case DXGI.Format.BC2_Typeless: return DXGI.Format.BC2_UNorm;
+                case DXGI.Format.BC3_Typeless: return DXGI.Format.BC3_UNorm;
+                case DXGI.Format.BC4_Typeless: return DXGI.Format.BC4_UNorm;
+                case DXGI.Format.BC5_Typeless: return DXGI.Format.BC5_UNorm;
+                case DXGI.Format.B8G8R8A8_Typeless: return DXGI.Format.B8G8R8A8_UNorm;
+                case DXGI.Format.B8G8R8X8_Typeless: return DXGI.Format.B8G8R8X8_UNorm;
+                case DXGI.Format.BC7_Typeless: return DXGI.Format.BC7_UNorm;
+                default: return format;
+            }
         }
     }
 }

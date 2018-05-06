@@ -2,7 +2,6 @@
 using System.IO;
 using SharpDX.Direct3D11;
 using SharpDX.Direct3D;
-using SharpDX.DXGI;
 using SharpDX.WIC;
 
 namespace SharpDX.DirectXToolkit {
@@ -16,6 +15,13 @@ namespace SharpDX.DirectXToolkit {
                     imgFactory = new ImagingFactory2();
                 }
                 return imgFactory;
+            }
+        }
+
+        private static bool WIC2 {
+            get {
+                if (imgFactory.QueryInterface<ImagingFactory2>() is ImagingFactory2 fac2) return true;
+                else return false;
             }
         }
 
@@ -53,7 +59,7 @@ namespace SharpDX.DirectXToolkit {
                         decoder.Initialize(wicstream, DecodeOptions.CacheOnDemand);
                         using (var frame = decoder.GetFrame(0)) {
                             CreateWICTexture(device, frame,
-                                    0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.None, ResourceOptionFlags.None, LoadFlags.Default,
+                                    0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.Read, ResourceOptionFlags.None, LoadFlags.Default,
                                     out texture, out textureView);
                         }
                     } catch (SharpDXException e) {
@@ -111,20 +117,20 @@ namespace SharpDX.DirectXToolkit {
             // Determine format
             Guid sourceFormat = frame.PixelFormat;
             Guid targetFormat = sourceFormat;
-            Format format = sourceFormat.ConvertToDXGIFormat();
+            DXGI.Format format = sourceFormat.ConvertWICToDXGIFormat();
             int bpp = 0;
 
-            if (format == Format.Unknown) {
+            if (format == DXGI.Format.Unknown) {
                 if (sourceFormat == PixelFormat.Format96bppRGBFixedPoint) {
                     targetFormat = PixelFormat.Format96bppRGBFloat;
-                    format = Format.R32G32B32_Float;
+                    format = DXGI.Format.R32G32B32_Float;
                     bpp = 96;
                 } else {
                     targetFormat = sourceFormat.ConvertToNearest();
-                    format = targetFormat.ConvertToDXGIFormat();
+                    format = targetFormat.ConvertWICToDXGIFormat();
                     bpp = PixelFormat.GetBitsPerPixel(targetFormat);
                 }
-                if (format == Format.Unknown)
+                if (format == DXGI.Format.Unknown)
                     return Result.GetResultFromWin32Error(unchecked((int)0x80070032));
             } else {
                 bpp = PixelFormat.GetBitsPerPixel(sourceFormat);
@@ -169,8 +175,8 @@ namespace SharpDX.DirectXToolkit {
 
             var support = device.CheckFormatSupport(format);
             if (support.HasFlag(FormatSupport.Texture2D)) {
-                targetFormat = PixelFormat.Format32bppRGBA;
-                format = Format.R8G8B8A8_UNorm;
+                targetFormat = PixelFormat.Format32bppBGRA;
+                format = DXGI.Format.B8G8R8A8_UNorm;
                 bpp = 32;
             }
 
@@ -235,7 +241,7 @@ namespace SharpDX.DirectXToolkit {
                 MipLevels = autogen ? 0 : 1,
                 ArraySize = 1,
                 Format = format,
-                SampleDescription = new SampleDescription(1, 0),
+                SampleDescription = new DXGI.SampleDescription(1, 0),
                 Usage = usage,
                 CpuAccessFlags = cpuAccess,
             };
@@ -260,6 +266,192 @@ namespace SharpDX.DirectXToolkit {
             };
 
             textureView = new ShaderResourceView(device, texture, SRVDesc);
+
+            return Result.Ok;
+        }
+
+        public static Result SaveTextureToStream(Direct3D11.DeviceContext deviceContext, Direct3D11.Texture2D source, Stream stream, Guid containerFormat, Guid targetFormatGuid) {
+
+            Result result = Result.Ok;
+
+            if (source == null || deviceContext == null || stream == null) return Result.InvalidArg;
+            result = CreateStagingTexture(deviceContext, source, out Texture2DDescription desc, out Texture2D staging);
+            if (!result.Success) return result;
+
+            Guid sourceFormat = desc.Format.ConvertDXGIToWICFormat();
+            if (sourceFormat == Guid.Empty) return Result.InvalidArg;
+
+            if (ImagingFactory == null) return Result.NoInterface;
+
+            Guid targetFormat = targetFormatGuid;
+            if (targetFormat == Guid.Empty) {
+                switch (desc.Format) {
+                    case DXGI.Format.R32G32B32A32_Float:
+                    case DXGI.Format.R16G16B16A16_Float:
+                        if (WIC2) {
+                            targetFormat = PixelFormat.Format96bppRGBFloat;
+                        } else {
+                            targetFormat = PixelFormat.Format24bppBGR;
+                        }
+                        break;
+                    case DXGI.Format.R16G16B16A16_UNorm:
+                        targetFormat = PixelFormat.Format48bppBGR;
+                        break;
+                    case DXGI.Format.B5G5R5A1_UNorm:
+                        targetFormat = PixelFormat.Format16bppBGR555;
+                        break;
+                    case DXGI.Format.B5G6R5_UNorm:
+                        targetFormat = PixelFormat.Format16bppBGR565;
+                        break;
+                    case DXGI.Format.R32_Float:
+                    case DXGI.Format.R16_Float:
+                    case DXGI.Format.R16_UNorm:
+                    case DXGI.Format.R8_UNorm:
+                    case DXGI.Format.A8_UNorm:
+                        targetFormat = PixelFormat.Format8bppGray;
+                        break;
+                    default:
+                        targetFormat = PixelFormat.Format24bppBGR;
+                        break;
+                }
+            }
+
+            try {
+                // Create a new file
+                if (stream.CanWrite) {
+                    using (BitmapEncoder encoder = new BitmapEncoder(ImagingFactory, containerFormat)) {
+                        encoder.Initialize(stream);
+
+                        using (BitmapFrameEncode frameEncode = new BitmapFrameEncode(encoder)) {
+                            frameEncode.Initialize();
+                            frameEncode.SetSize(desc.Width, desc.Height);
+                            frameEncode.SetResolution(72.0, 72.0);
+
+                            
+                            frameEncode.SetPixelFormat(ref targetFormat);
+
+                            if (targetFormatGuid == Guid.Empty || targetFormat == targetFormatGuid) {
+                                int subresource = 0;
+                                
+                                // 讓CPU存取顯存貼圖
+                                DataBox db = deviceContext.MapSubresource(staging, subresource, MapMode.Read, MapFlags.None, out var dataStream);
+
+                                if (sourceFormat != targetFormat) {
+                                    // BGRA格式轉換
+                                    using (FormatConverter formatCoverter = new FormatConverter(ImagingFactory)) {
+                                        if (formatCoverter.CanConvert(sourceFormat, targetFormat)) {
+                                            Bitmap src = new Bitmap(ImagingFactory, desc.Width, desc.Height, sourceFormat, new DataRectangle(db.DataPointer, db.RowPitch));
+                                            formatCoverter.Initialize(src, targetFormat, BitmapDitherType.None, null, 0, BitmapPaletteType.Custom);
+                                            frameEncode.WriteSource(formatCoverter, new Rectangle(0, 0, desc.Width, desc.Height));
+                                        }
+                                    }
+                                } else {
+                                    frameEncode.WritePixels(desc.Height, new DataRectangle(db.DataPointer, db.RowPitch));
+                                }
+                                
+                                // 控制權歸還
+                                deviceContext.UnmapSubresource(staging, subresource);
+
+                                frameEncode.Commit();
+                                encoder.Commit();
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.Diagnostics.Debug.WriteLine(e.ToString());
+                result = Result.Fail;
+            }
+
+            Utilities.Dispose(ref staging);
+
+            return result;
+        }
+
+        /// <summary>
+        /// 建立一個臨時的 Texture 以便擷取資源
+        /// </summary>
+        /// <param name="source">來源texture</param>
+        /// <param name="staging">複本texture</param>
+        /// <returns></returns>
+        private static Result CreateStagingTexture(Direct3D11.DeviceContext deviceContext, Direct3D11.Resource source, out Texture2DDescription desc, out Texture2D staging) {
+            desc = new Texture2DDescription();
+            staging = null;
+            if (deviceContext == null && source == null) return Result.InvalidArg;
+
+            ResourceDimension resourceDimension = source.Dimension;
+            if (resourceDimension != ResourceDimension.Texture2D) {
+                return Result.InvalidArg;
+            }
+
+            if (!(source.QueryInterface<Texture2D>() is Texture2D src)) return Result.Fail;
+            desc = src.Description;
+            var d3dDevice = deviceContext.Device;
+
+            if (desc.SampleDescription.Count > 1) {
+                desc.SampleDescription.Count = 1;
+                desc.SampleDescription.Quality = 0;
+
+                Texture2D temp;
+
+                try {
+                    temp = new Texture2D(d3dDevice, desc);
+                } catch (SharpDXException e) {
+                    return e.ResultCode;
+                }
+
+                DXGI.Format fmt = desc.Format.EnsureNotTypeless();
+
+                FormatSupport support = FormatSupport.None;
+                try {
+                    support = d3dDevice.CheckFormatSupport(fmt);
+                } catch (SharpDXException e) {
+                    return e.ResultCode;
+                }
+
+                if ((support & FormatSupport.MultisampleResolve) == 0)
+                    return Result.Fail;
+
+                for (int item = 0; item < desc.ArraySize; ++item) {
+                    for (int level = 0; level < desc.MipLevels; ++level) {
+                        int index = Direct3D11.Resource.CalculateSubResourceIndex(level, item, desc.MipLevels);
+                        deviceContext.ResolveSubresource(temp, index, source, index, fmt);
+                    }
+                }
+
+                desc.BindFlags = BindFlags.None;
+                desc.OptionFlags &= ResourceOptionFlags.TextureCube;
+                desc.CpuAccessFlags = CpuAccessFlags.Read;
+                desc.Usage = ResourceUsage.Staging;
+
+                try {
+                    staging = new Texture2D(d3dDevice, desc);
+                    deviceContext.CopyResource(temp, staging);
+                } catch (SharpDXException e) {
+                    return e.ResultCode;
+                }
+            } else if (desc.Usage == ResourceUsage.Staging && desc.CpuAccessFlags == CpuAccessFlags.Read) {
+                staging = source.QueryInterface<Texture2D>();
+            } else {
+                desc.BindFlags = BindFlags.None;
+                desc.OptionFlags &= ResourceOptionFlags.TextureCube;
+                desc.CpuAccessFlags = CpuAccessFlags.Read;
+                desc.Usage = ResourceUsage.Staging;
+
+                try {
+                    staging = new Texture2D(d3dDevice, desc);
+                    if (staging != null) {
+                        deviceContext.CopyResource(source, staging);
+                    } else {
+                        return Result.Fail; 
+                    }
+                } catch (SharpDXException e) {
+                    return e.ResultCode;
+                } catch (Exception ex) {
+                    System.Diagnostics.Debug.WriteLine(ex.ToString());
+                    return Result.Fail;
+                }
+            }
 
             return Result.Ok;
         }

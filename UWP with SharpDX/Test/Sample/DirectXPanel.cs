@@ -56,7 +56,7 @@ namespace MyGame {
         private SharpDX.DirectWrite.TextFormat textFormat;
         private SharpDX.Direct2D1.SolidColorBrush textBrush;
 
-        private Task<ShaderResourceView> CreateTextureTask;
+        private Task<(SharpDX.Direct3D11.Resource, ShaderResourceView)> CreateTextureTask;
 
         enum RunMode {
             Immediate = 0,
@@ -66,7 +66,7 @@ namespace MyGame {
         RunMode Mode = RunMode.Deferred;
 
         bool TearingSupport = false; // 支援關閉垂直同步
-        bool Running = false;
+        public bool Running { get; private set; }
 
         InputLayout VertexLayout;
 
@@ -129,7 +129,7 @@ namespace MyGame {
             };
             DeviceCreationFlags flags = DeviceCreationFlags.BgraSupport;
 #if DEBUG
-            flags |= DeviceCreationFlags.Debug;
+            //flags |= DeviceCreationFlags.Debug;
 #endif
             D3D11Device = new SharpDX.Direct3D11.Device(CurrentAdapter, flags, featureLevels);
 
@@ -152,7 +152,7 @@ namespace MyGame {
                 SampleDescription = new SampleDescription(1, 0), // 在flip model下SwapChain不能開multi-sampling，只能另闢蹊徑
                 Scaling = Scaling.Stretch,
                 Flags = SwapChainFlags.AllowModeSwitch | SwapChainFlags.AllowTearing,
-                Format = Format.R8G8B8A8_UNorm,
+                Format = Format.B8G8R8A8_UNorm,
                 Width = size.Width,
                 Height = size.Height,
             };
@@ -160,7 +160,7 @@ namespace MyGame {
             Dictionary<int, int> count_quality_levels = new Dictionary<int, int>();
 
             for (int i = 1; i <= SharpDX.Direct3D11.Device.MultisampleCountMaximum; i++) {
-                var quality = D3D11Device.CheckMultisampleQualityLevels(Format.R8G8B8A8_UNorm, i);
+                var quality = D3D11Device.CheckMultisampleQualityLevels(Format.B8G8R8A8_UNorm, i);
                 count_quality_levels.Add(i, quality);
             }
 
@@ -178,7 +178,7 @@ namespace MyGame {
         private void CreateRenderTargetView(DeviceContext context) {
 
             offScreenSurface = new Texture2D(D3D11Device, new Texture2DDescription {
-                Format = Format.R8G8B8A8_UNorm,
+                Format = Format.B8G8R8A8_UNorm,
                 Width = 1920,
                 Height = 1080,
                 BindFlags = BindFlags.RenderTarget,
@@ -203,7 +203,7 @@ namespace MyGame {
             depthView = new DepthStencilView(D3D11Device, depthBuffer);
 
             renderTargetView = new RenderTargetView(D3D11Device, offScreenSurface, new RenderTargetViewDescription {
-                Format = Format.R8G8B8A8_UNorm,
+                Format = Format.B8G8R8A8_UNorm,
                 Dimension = RenderTargetViewDimension.Texture2DMultisampled,
             });
 
@@ -263,16 +263,17 @@ namespace MyGame {
         public void UpdateQRCode(string message) {
 
             if (CreateTextureTask == null) {
-                ShaderResourceView func(string msg, SharpDX.Direct3D11.Device device) {
+                (SharpDX.Direct3D11.Resource, ShaderResourceView) func(string msg, SharpDX.Direct3D11.Device device) {
+                    ShaderResourceView textureView = null;
+                    SharpDX.Direct3D11.Resource texture = null;
                     using (var qrGenerator = new QRCodeGenerator()) {
                         var data = qrGenerator.CreateQrCode(msg, QRCodeGenerator.ECCLevel.Q);
                         PngByteQRCode qrCode = new PngByteQRCode(data);
                         var dataBytes = qrCode.GetGraphic(40);
-                        ShaderResourceView textureView = null;
                         using (var mmStream = new MemoryStream(dataBytes)) {
-                            DirectXToolkit.CreateTexture(device, mmStream, out _, out textureView);
+                            DirectXToolkit.CreateTexture(device, mmStream, out texture, out textureView);
                         }
-                        return textureView;
+                        return (texture, textureView);
                     }
                 }
                 CreateTextureTask = Task.Run(() => { return func(message, D3D11Device); });
@@ -290,15 +291,23 @@ namespace MyGame {
 
         public void UpdateFile(StorageFile file) {
             if (CreateTextureTask == null) {
-                ShaderResourceView func(StorageFile f, SharpDX.Direct3D11.Device device) {
-                    DirectXToolkit.CreateTexture(device, f, out _, out var textureView);
-                    return textureView;
+                (SharpDX.Direct3D11.Resource, ShaderResourceView) func(StorageFile f, SharpDX.Direct3D11.Device device) {
+                    DirectXToolkit.CreateTexture(device, f, out var texture, out var textureView);
+                    return (texture, textureView);
                 }
 
                 CreateTextureTask = Task.Run(() => { return func(file, D3D11Device); });
-            }
-                
+            }    
         }
+
+        public void SaveFile(StorageFile file) {
+            if (target != null) {
+                saveFile = file;
+            }  
+        }
+
+        StorageFile saveFile;
+        SharpDX.Direct3D11.Resource target;
 
         private void Update() {
             // 更新資料
@@ -312,11 +321,20 @@ namespace MyGame {
             }
 
             if (CreateTextureTask != null && CreateTextureTask.IsCompletedSuccessfully) {
-                ShaderResourceView result = CreateTextureTask.Result;
+                var result = CreateTextureTask.Result;
                 CreateTextureTask = null;
-                if (result != null) {
-                    MainContext?.PixelShader.SetShaderResource(0, result);
+                if (result.Item1 is SharpDX.Direct3D11.Resource texture && result.Item2 is ShaderResourceView textureView) {
+                    target = result.Item1;
+                    MainContext?.PixelShader.SetShaderResource(0, textureView);
                 }
+            }
+
+            if (saveFile != null) {
+                var task = saveFile.OpenStreamForWriteAsync();
+                using (var stream = task.Result) {
+                    DirectXToolkit.SaveTextureToStream(D3D11Device.ImmediateContext, target.QueryInterface<Texture2D>(), stream, SharpDX.WIC.ContainerFormatGuids.Png, Guid.Empty);
+                }
+                saveFile = null;
             }
 
             SetViewport(MainContext);
@@ -349,7 +367,7 @@ namespace MyGame {
                 // https://docs.microsoft.com/en-us/windows/uwp/gaming/multisampling--multi-sample-anti-aliasing--in-windows-store-apps
                 using (var BackBuffer = SwapChain.GetBackBuffer<Texture2D>(0)) {
                     var index = SharpDX.Direct3D11.Resource.CalculateSubResourceIndex(0, 0, 1);
-                    MainContext.ResolveSubresource(offScreenSurface, index, BackBuffer, index, Format.R8G8B8A8_UNorm);
+                    MainContext.ResolveSubresource(offScreenSurface, index, BackBuffer, index, Format.B8G8R8A8_UNorm);
                 }
 
                 D2DDraw();
@@ -506,12 +524,12 @@ namespace MyGame {
             return code;
         }
 
-        private async Task<DDS> LoadDDSFromFile(Uri uri) {
-            DDS dds = null;
+        private async Task<DirectDrawSurface> LoadDDSFromFile(Uri uri) {
+            DirectDrawSurface dds = null;
             var file = await StorageFile.GetFileFromApplicationUriAsync(uri);
             if (file != null) {
                 using (var stream = await file.OpenStreamForReadAsync()) {
-                    dds = new DDS(stream);
+                    dds = new DirectDrawSurface(stream);
                 }
             }
             return dds;
