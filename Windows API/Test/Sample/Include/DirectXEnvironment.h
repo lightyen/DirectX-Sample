@@ -1,6 +1,5 @@
 #pragma once
 
-#include "stdafx.h"
 #include "SimpleVertex.h"
 #include "Shader.h"
 #include <vector>
@@ -10,9 +9,11 @@
 #include <dxgi1_2.h>
 #include <DirectXColors.h>
 #include <wrl\client.h>
+#include "registry.h"
 using namespace Microsoft::WRL;
 #include "DirectXTK\Inc\WICTextureLoader.h"
-#include "DDSTextureLoader.h"
+//#include "DDSTextureLoader.h"
+#include <windows.h>
 
 #define CHECKRETURN(a,b) if (CheckFailed(a,b)) { \
 	return; \
@@ -47,6 +48,29 @@ namespace DirectX {
 		ComPtr<ID3D11Buffer> IndexBuffer;
 		ComPtr<ID3D11ShaderResourceView> ShaderRV;
 		ComPtr<ID3D11SamplerState> SamplerState;
+
+		void OpenImage() {
+			OPENFILENAME ofn;
+			ZeroMemory(&ofn, sizeof(ofn));
+			ofn.lStructSize = sizeof(ofn);
+			ofn.nMaxFile = 1 * MAX_PATH;
+			ofn.lpstrFile = new TCHAR[ofn.nMaxFile];
+			ofn.lpstrFile[0] = TEXT('\0');
+			ofn.lpstrFilter = TEXT("Files(*.png;*.jpg)\0*.png;*.jpg\0\0");
+
+			DWORD len;
+			GetPathMyPictures(NULL, &len);
+			TCHAR* pictureFolder = (TCHAR*)new BYTE[len];
+			GetPathMyPictures(pictureFolder, &len);
+			ofn.lpstrInitialDir = pictureFolder;
+
+			//ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST;
+
+			if (GetOpenFileName(&ofn)) {
+				LPTSTR a = ofn.lpstrFile;
+				auto c = a[0];
+			}
+		}
 
 		void Initialize(D3D11_CREATE_DEVICE_FLAG flags = D3D11_CREATE_DEVICE_DEBUG) {
 			HRESULT hr = E_FAIL;

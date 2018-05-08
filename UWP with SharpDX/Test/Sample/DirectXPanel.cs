@@ -292,7 +292,7 @@ namespace MyGame {
         public void UpdateFile(StorageFile file) {
             if (CreateTextureTask == null && D3D11Device != null) {
                 (SharpDX.Direct3D11.Resource, ShaderResourceView) func(StorageFile f, SharpDX.Direct3D11.Device device) {
-                    DirectXTK.CreateTexture(device, f, out var texture, out var textureView);
+                    DirectXTK.CreateTexture(device, f, out var texture, out var textureView, D3D11Device.ImmediateContext);
                     return (texture, textureView);
                 }
                 
@@ -498,7 +498,6 @@ namespace MyGame {
                 Clear();
                 if (ExitSem != null) {
                     await ExitSem.WaitAsync();
-                    ExitSem.Dispose();
                     ExitSem = null;
                 }
             }
@@ -516,8 +515,8 @@ namespace MyGame {
             Utilities.Dispose(ref D2DDeviceContext);
             Utilities.Dispose(ref MainContext);
             Utilities.Dispose(ref SwapChain);
-            Utilities.Dispose(ref D3D11Device);
             Utilities.Dispose(ref CurrentAdapter);
+            Utilities.Dispose(ref D3D11Device);
         }
 
         private async Task<byte[]> LoadShaderCodeFromFile(Uri uri) {

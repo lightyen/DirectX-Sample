@@ -62,7 +62,7 @@ namespace DirectXToolkit {
                         decoder.Initialize(wicstream, DecodeOptions.CacheOnDemand);
                         using (var frame = decoder.GetFrame(0)) {
                             CreateWICTexture(device, d3dContext, frame,
-                                    0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.Read, ResourceOptionFlags.None, LoadFlags.Default,
+                                    0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.None, ResourceOptionFlags.None, LoadFlags.Default,
                                     out texture, out textureView);
                         }
                     } catch (SharpDXException e) {
@@ -247,7 +247,7 @@ namespace DirectXToolkit {
             var texture2DDescription = new Texture2DDescription() {
                 Width = targetSize.Width,
                 Height = targetSize.Height,
-                MipLevels = autogen ? 0 : 1,
+                MipLevels = autogen ? 3 : 1,
                 ArraySize = 1,
                 Format = format,
                 SampleDescription = new DXGI.SampleDescription(1, 0),
@@ -263,38 +263,57 @@ namespace DirectXToolkit {
                 texture2DDescription.OptionFlags = option;
             }
 
+            Result result = Result.Ok;
+
             // 建立Texture2D !!!
-            if (autogen) {
-                texture = new Texture2D(device, texture2DDescription);
-            } else {
-                texture = new Texture2D(device, texture2DDescription, new DataBox[] { new DataBox(temp, stride, imageSize) });
-            }
-
-            if (texture == null) {
-                // 釋放 Unmanaged 資源
-                System.Runtime.InteropServices.Marshal.FreeCoTaskMem(temp);
-                return Result.Fail;
-            }
-
-            var SRVDesc = new ShaderResourceViewDescription() {
-                Format = format,
-                Dimension = ShaderResourceViewDimension.Texture2D,
-                Texture2D = new ShaderResourceViewDescription.Texture2DResource() { MipLevels = autogen ? -1 : 1 },
-            };
-
-            textureView = new ShaderResourceView(device, texture, SRVDesc);
-
             try {
                 if (autogen) {
-                    d3dContext.UpdateSubresource(new DataBox(temp, stride, imageSize), texture, 0);
-                    d3dContext.GenerateMips(textureView);
+                    texture = new Texture2D(device, texture2DDescription);
+                } else {
+                    texture = new Texture2D(device, texture2DDescription, new DataBox[] { new DataBox(temp, stride, imageSize) });
                 }
-            } finally {
-                // 釋放 Unmanaged 資源
-                System.Runtime.InteropServices.Marshal.FreeCoTaskMem(temp);
+            } catch (SharpDXException e) {
+                System.Diagnostics.Debug.WriteLine(e.ToString());
+                result = Result.Fail;
             }
 
-            return Result.Ok;
+            if (result.Success) {
+                try {
+                    if (autogen) {
+                        // problem
+                        DataBox data = new DataBox(temp, stride, imageSize);
+                        d3dContext.UpdateSubresource(data, texture);
+                    }
+                } catch (Exception e) {
+                    System.Diagnostics.Debug.WriteLine(e.ToString());
+                    Utilities.Dispose(ref texture);
+                    result = Result.Fail;
+                }
+            }
+
+            if (result.Success) {
+                var SRVDesc = new ShaderResourceViewDescription() {
+                    Format = format,
+                    Dimension = ShaderResourceViewDimension.Texture2D,
+                    Texture2D = new ShaderResourceViewDescription.Texture2DResource() { MipLevels = autogen ? -1 : 1 },
+                };
+
+                try {
+                    textureView = new ShaderResourceView(device, texture, SRVDesc);
+                    if (autogen) {
+                        d3dContext.GenerateMips(textureView);
+                    }
+                } catch (Exception e) {
+                    System.Diagnostics.Debug.WriteLine(e.ToString());
+                    Utilities.Dispose(ref texture);
+                    result = Result.Fail;
+                }
+            }
+
+            // 釋放 Unmanaged 資源
+            System.Runtime.InteropServices.Marshal.FreeCoTaskMem(temp);
+
+            return result;
         }
 
         public static Result SaveTextureToStream(Device d3dDevice, Resource source, Stream stream) {

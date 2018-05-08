@@ -4,10 +4,10 @@
 // https://msdn.microsoft.com/zh-tw/library/dd293665.aspx
 
 #include <windows.h>
-#include <Shlwapi.h>
+
 #define BUFFER_MAX_CCH 0xFFFF
 #include <Strsafe.h>
-#include <comdef.h>
+
 #include <memory>
 #include <utility>
 using namespace std;
