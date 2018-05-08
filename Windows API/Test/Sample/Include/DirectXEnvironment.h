@@ -11,8 +11,7 @@
 #include <wrl\client.h>
 #include "registry.h"
 using namespace Microsoft::WRL;
-#include "DirectXTK\Inc\WICTextureLoader.h"
-//#include "DDSTextureLoader.h"
+#include "WICTextureLoader.h"
 #include <windows.h>
 
 #define CHECKRETURN(a,b) if (CheckFailed(a,b)) { \
