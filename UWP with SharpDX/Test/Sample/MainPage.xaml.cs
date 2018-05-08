@@ -52,8 +52,8 @@ namespace Sample
             };
 
             save_picker.FileTypeChoices.Add("PNG", new List<string>() { ".png" });
-            save_picker.FileTypeChoices.Add("JPG", new List<string>() { ".jpg" });
-            save_picker.SuggestedFileName = "test";
+            save_picker.FileTypeChoices.Add("JPEG", new List<string>() { ".jpg", ".jpeg", ".jpe", ".jfif" });
+            save_picker.SuggestedFileName = "未命名";
             this.DataContext = this;
 
             QRMessage = "https://github.com/lightyen/DirectX-Sample";
@@ -93,7 +93,16 @@ namespace Sample
         private async void SaveFile_Click(object sender, RoutedEventArgs e) {
             if (await save_picker.PickSaveFileAsync() is Windows.Storage.StorageFile file) {
                 if (App.Current.Resources[nameof(DirectXPanel)] is DirectXPanel xPanel) {
-                    xPanel.SaveFile(file);
+                    if (xPanel.SaveFile(file).Failure) {
+                        FlyoutBase.ShowAttachedFlyout(MyGrid);
+                        Windows.System.Threading.ThreadPoolTimer.CreateTimer((timer) => {
+                            var acti = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => {
+                                FlyoutBase.GetAttachedFlyout(MyGrid).Hide();
+                            });
+                        }, TimeSpan.FromMilliseconds(1600));
+                        //var dialog = new Windows.UI.Popups.MessageDialog("Save Texture Failed");
+                        //await dialog.ShowAsync();
+                    }
                 }
             }
         }

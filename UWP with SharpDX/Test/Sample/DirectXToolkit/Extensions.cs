@@ -2,7 +2,7 @@
 using SharpDX.DXGI;
 using SharpDX.WIC;
 
-namespace SharpDX.DirectXToolkit {
+namespace DirectXToolkit {
 
     [Flags]
     public enum LoadFlags {
@@ -411,27 +411,27 @@ namespace SharpDX.DirectXToolkit {
             public Guid TargetFormat { get; private set; }
         }
 
-        public static DXGI.Format EnsureNotTypeless(this DXGI.Format format) {
+        public static Format EnsureNotTypeless(this Format format) {
             switch (format) {
-                case DXGI.Format.R32G32B32A32_Typeless: return DXGI.Format.R32G32B32A32_Float;
-                case DXGI.Format.R32G32B32_Typeless: return DXGI.Format.R32G32B32_Float;
-                case DXGI.Format.R16G16B16A16_Typeless: return DXGI.Format.R16G16B16A16_UNorm;
-                case DXGI.Format.R32G32_Typeless: return DXGI.Format.R32G32_Float;
-                case DXGI.Format.R10G10B10A2_Typeless: return DXGI.Format.R10G10B10A2_UNorm;
-                case DXGI.Format.R8G8B8A8_Typeless: return DXGI.Format.R8G8B8A8_UNorm;
-                case DXGI.Format.R16G16_Typeless: return DXGI.Format.R16G16_UNorm;
-                case DXGI.Format.R32_Typeless: return DXGI.Format.R32_Float;
-                case DXGI.Format.R8G8_Typeless: return DXGI.Format.R8G8_UNorm;
-                case DXGI.Format.R16_Typeless: return DXGI.Format.R16_UNorm;
-                case DXGI.Format.R8_Typeless: return DXGI.Format.R8_UNorm;
-                case DXGI.Format.BC1_Typeless: return DXGI.Format.BC1_UNorm;
-                case DXGI.Format.BC2_Typeless: return DXGI.Format.BC2_UNorm;
-                case DXGI.Format.BC3_Typeless: return DXGI.Format.BC3_UNorm;
-                case DXGI.Format.BC4_Typeless: return DXGI.Format.BC4_UNorm;
-                case DXGI.Format.BC5_Typeless: return DXGI.Format.BC5_UNorm;
-                case DXGI.Format.B8G8R8A8_Typeless: return DXGI.Format.B8G8R8A8_UNorm;
-                case DXGI.Format.B8G8R8X8_Typeless: return DXGI.Format.B8G8R8X8_UNorm;
-                case DXGI.Format.BC7_Typeless: return DXGI.Format.BC7_UNorm;
+                case Format.R32G32B32A32_Typeless: return Format.R32G32B32A32_Float;
+                case Format.R32G32B32_Typeless: return Format.R32G32B32_Float;
+                case Format.R16G16B16A16_Typeless: return Format.R16G16B16A16_UNorm;
+                case Format.R32G32_Typeless: return Format.R32G32_Float;
+                case Format.R10G10B10A2_Typeless: return Format.R10G10B10A2_UNorm;
+                case Format.R8G8B8A8_Typeless: return Format.R8G8B8A8_UNorm;
+                case Format.R16G16_Typeless: return Format.R16G16_UNorm;
+                case Format.R32_Typeless: return Format.R32_Float;
+                case Format.R8G8_Typeless: return Format.R8G8_UNorm;
+                case Format.R16_Typeless: return Format.R16_UNorm;
+                case Format.R8_Typeless: return Format.R8_UNorm;
+                case Format.BC1_Typeless: return Format.BC1_UNorm;
+                case Format.BC2_Typeless: return Format.BC2_UNorm;
+                case Format.BC3_Typeless: return Format.BC3_UNorm;
+                case Format.BC4_Typeless: return Format.BC4_UNorm;
+                case Format.BC5_Typeless: return Format.BC5_UNorm;
+                case Format.B8G8R8A8_Typeless: return Format.B8G8R8A8_UNorm;
+                case Format.B8G8R8X8_Typeless: return Format.B8G8R8X8_UNorm;
+                case Format.BC7_Typeless: return Format.BC7_UNorm;
                 default: return format;
             }
         }

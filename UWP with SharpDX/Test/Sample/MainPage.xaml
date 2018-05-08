@@ -5,18 +5,40 @@
     xmlns:local="using:Sample"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    mc:Ignorable="d" IsEnabled="{x:Bind AppSwapChainPanel.DirectXEnabled, Mode=OneWay}">
+    <Page.Resources>
+        <Flyout x:Key="ErrorFlyout" Placement="Full">
+            <Flyout.FlyoutPresenterStyle>
+                <Style TargetType="FlyoutPresenter">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="FlyoutPresenter">
+                                <Grid Background="{TemplateBinding Background}" Width="100" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Border x:Name="MenuFlyoutPresenterBorder" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="發生問題" FontSize="22"></TextBlock>
+                                    </Border>
+                                </Grid>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Flyout.FlyoutPresenterStyle>
+        </Flyout>
+    </Page.Resources>
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="350" />
+            <ColumnDefinition Width="300" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Column="0" Orientation="Vertical">
-            <Button Height="50" HorizontalAlignment="Stretch" VerticalAlignment="Top" Click="Button_Click" />
+            <Button Height="50" Content="產生QR code" HorizontalAlignment="Stretch" VerticalAlignment="Top" Click="Button_Click" />
             <TextBox Margin="0,20,0,20" Text="{Binding QRMessage, Mode=TwoWay}" Height="50" />
-            <Button Height="50" HorizontalAlignment="Stretch" Click="OpenFile_Click" />
-            <Button Height="50" Margin="0,10,0,10" HorizontalAlignment="Stretch" Click="SaveFile_Click" />
+            <Button Height="50" Content="載入圖片" HorizontalAlignment="Stretch" Click="OpenFile_Click" />
+            <Button Height="50" Content="另存圖片" Margin="0,10,0,10" HorizontalAlignment="Stretch" Click="SaveFile_Click" />
         </StackPanel>
         <local:AppSwapChainPanel x:Name="AppSwapChainPanel" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+        <Grid x:Name="MyGrid" Grid.ColumnSpan="2" FlyoutBase.AttachedFlyout="{StaticResource ErrorFlyout}">
+            
+        </Grid>
     </Grid>
 </Page>

@@ -1,15 +1,16 @@
 ﻿using System;
 using System.IO;
-using SharpDX.DXGI;
+using SharpDX;
+using DXGI = SharpDX.DXGI;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using System.Runtime.InteropServices;
 using SharpDX.Multimedia;
 
-namespace SharpDX.DirectXToolkit {
-    public static partial class DirectXToolkit {
+namespace DirectXToolkit {
+    public static partial class DirectXTK {
 
-        public static void CreateDDSTextureFromStream(Direct3D11.Device d3dDevice, Stream stream, Direct3D11.DeviceContext deviceContext, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
+        public static void CreateDDSTextureFromStream(Device d3dDevice, Stream stream, out Resource texture, out ShaderResourceView textureView, DeviceContext deviceContext = null) {
             if (stream.CanRead) {
                 using (var dds = new DirectDrawSurface(stream)) {
                     CreateDDSTextureFromMemory(d3dDevice, dds, out texture, out textureView);
@@ -27,11 +28,11 @@ namespace SharpDX.DirectXToolkit {
         /// <param name="dds"></param>
         /// <param name="texture"></param>
         /// <param name="textureView"></param>
-        public static void CreateDDSTextureFromMemory(Direct3D11.Device d3dDevice, DirectDrawSurface dds, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
+        public static void CreateDDSTextureFromMemory(Device d3dDevice, DirectDrawSurface dds, out Resource texture, out ShaderResourceView textureView) {
             CreateDDSTextureFromMemoryEx(d3dDevice, dds, 0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.None, ResourceOptionFlags.None, false, out texture, out textureView, out var alphaMode);
         }
 
-        public static void CreateDDSTextureFromMemoryEx(Direct3D11.Device d3dDevice,
+        public static void CreateDDSTextureFromMemoryEx(Device d3dDevice,
             DirectDrawSurface dds,
             int maxsize,
             ResourceUsage usage,
@@ -39,8 +40,8 @@ namespace SharpDX.DirectXToolkit {
             CpuAccessFlags cpuAccessFlags,
             ResourceOptionFlags miscFlags,
             bool forceSRGB,
-            out Direct3D11.Resource texture,
-            out Direct3D11.ShaderResourceView textureView,
+            out Resource texture,
+            out ShaderResourceView textureView,
             out DDS_AlphaMode alphaMode) {
             texture = null;
             textureView = null;
@@ -64,8 +65,8 @@ namespace SharpDX.DirectXToolkit {
         }
 
         private static Result CreateTextureFromDDS(
-            Direct3D11.Device d3dDevice,
-            Direct3D11.DeviceContext deviceContext,
+            Device d3dDevice,
+            DeviceContext deviceContext,
             DDS_HEADER header,
             DDS_HEADER_DXT10? header10,
             IntPtr bitData,
@@ -76,7 +77,7 @@ namespace SharpDX.DirectXToolkit {
             CpuAccessFlags cpuAccessFlags,
             ResourceOptionFlags resourceOptionFlags,
             bool forceSRGB,
-            out Direct3D11.Resource texture, out ShaderResourceView textureView) {
+            out Resource texture, out ShaderResourceView textureView) {
 
 
             texture = null;
@@ -88,7 +89,7 @@ namespace SharpDX.DirectXToolkit {
 
             ResourceDimension resourceDimension = ResourceDimension.Unknown;
             int arraySize = 1;
-            Format format = Format.Unknown;
+            DXGI.Format format = DXGI.Format.Unknown;
             bool isCubeMap = false;
 
             int mipCount = Convert.ToInt32(header.mipMapCount);
@@ -104,10 +105,10 @@ namespace SharpDX.DirectXToolkit {
                 }
 
                 switch (d3d10ext.dxgiFormat) {
-                    case Format.AI44:
-                    case Format.IA44:
-                    case Format.P8:
-                    case Format.A8P8:
+                    case DXGI.Format.AI44:
+                    case DXGI.Format.IA44:
+                    case DXGI.Format.P8:
+                    case DXGI.Format.A8P8:
                         return Result.InvalidArg;
                     default:
                         if (d3d10ext.dxgiFormat.BitPerPixel() == 0) {
@@ -152,7 +153,7 @@ namespace SharpDX.DirectXToolkit {
             } else {
                 format = header.ddsPixelFormat.Format;
 
-                if (format == Format.Unknown) {
+                if (format == DXGI.Format.Unknown) {
                     return Result.InvalidArg;
                 }
 
@@ -188,18 +189,18 @@ namespace SharpDX.DirectXToolkit {
 
             switch (resourceDimension) {
                 case ResourceDimension.Texture1D:
-                    if (arraySize > Direct3D11.Resource.MaximumTexture1DArraySize || width > Direct3D11.Resource.MaximumTexture1DSize) return Result.InvalidArg;
+                    if (arraySize > Resource.MaximumTexture1DArraySize || width > Resource.MaximumTexture1DSize) return Result.InvalidArg;
                     break;
                 case ResourceDimension.Texture2D:
                     if (isCubeMap) {
-                        if (arraySize > Direct3D11.Resource.MaximumTexture2DArraySize || width > Direct3D11.Resource.MaximumTexture2DSize || height > Direct3D11.Resource.MaximumTexture2DSize) return Result.InvalidArg;
+                        if (arraySize > Resource.MaximumTexture2DArraySize || width > Resource.MaximumTexture2DSize || height > Resource.MaximumTexture2DSize) return Result.InvalidArg;
                     }
                     break;
                 case ResourceDimension.Texture3D:
                     if (arraySize > 1 ||
-                        width > Direct3D11.Resource.MaximumTexture3DSize ||
-                        height > Direct3D11.Resource.MaximumTexture3DSize ||
-                        depth > Direct3D11.Resource.MaximumTexture3DSize) return Result.InvalidArg;
+                        width > Resource.MaximumTexture3DSize ||
+                        height > Resource.MaximumTexture3DSize ||
+                        depth > Resource.MaximumTexture3DSize) return Result.InvalidArg;
                     break;
             }
 
@@ -264,7 +265,7 @@ namespace SharpDX.DirectXToolkit {
             int depth,
             int mipCount,
             int arraySize,
-            Format format,
+            DXGI.Format format,
             IntPtr bitData,
             int bitSize,
             int maxsize,
@@ -337,7 +338,7 @@ namespace SharpDX.DirectXToolkit {
             return (index > 0) ? Result.Ok : Result.Fail;
         }
 
-        private static void GetSurfaceInfo(int width, int height, Format fmt, out int numBytes, out int rowBytes, out int numRows) {
+        private static void GetSurfaceInfo(int width, int height, DXGI.Format fmt, out int numBytes, out int rowBytes, out int numRows) {
 
             rowBytes = 0;
             numRows = 0;
@@ -349,56 +350,56 @@ namespace SharpDX.DirectXToolkit {
             int bpe = 0;
 
             switch (fmt) {
-                case Format.BC1_Typeless:
-                case Format.BC1_UNorm:
-                case Format.BC1_UNorm_SRgb:
-                case Format.BC4_Typeless:
-                case Format.BC4_UNorm:
-                case Format.BC4_SNorm:
+                case DXGI.Format.BC1_Typeless:
+                case DXGI.Format.BC1_UNorm:
+                case DXGI.Format.BC1_UNorm_SRgb:
+                case DXGI.Format.BC4_Typeless:
+                case DXGI.Format.BC4_UNorm:
+                case DXGI.Format.BC4_SNorm:
                     bc = true;
                     bpe = 8;
                     break;
 
-                case Format.BC2_Typeless:
-                case Format.BC2_UNorm:
-                case Format.BC2_UNorm_SRgb:
-                case Format.BC3_Typeless:
-                case Format.BC3_UNorm:
-                case Format.BC3_UNorm_SRgb:
-                case Format.BC5_Typeless:
-                case Format.BC5_UNorm:
-                case Format.BC5_SNorm:
-                case Format.BC6H_Typeless:
-                case Format.BC6H_Uf16:
-                case Format.BC6H_Sf16:
-                case Format.BC7_Typeless:
-                case Format.BC7_UNorm:
-                case Format.BC7_UNorm_SRgb:
+                case DXGI.Format.BC2_Typeless:
+                case DXGI.Format.BC2_UNorm:
+                case DXGI.Format.BC2_UNorm_SRgb:
+                case DXGI.Format.BC3_Typeless:
+                case DXGI.Format.BC3_UNorm:
+                case DXGI.Format.BC3_UNorm_SRgb:
+                case DXGI.Format.BC5_Typeless:
+                case DXGI.Format.BC5_UNorm:
+                case DXGI.Format.BC5_SNorm:
+                case DXGI.Format.BC6H_Typeless:
+                case DXGI.Format.BC6H_Uf16:
+                case DXGI.Format.BC6H_Sf16:
+                case DXGI.Format.BC7_Typeless:
+                case DXGI.Format.BC7_UNorm:
+                case DXGI.Format.BC7_UNorm_SRgb:
                     bc = true;
                     bpe = 16;
                     break;
 
-                case Format.R8G8_B8G8_UNorm:
-                case Format.G8R8_G8B8_UNorm:
-                case Format.YUY2:
+                case DXGI.Format.R8G8_B8G8_UNorm:
+                case DXGI.Format.G8R8_G8B8_UNorm:
+                case DXGI.Format.YUY2:
                     packed = true;
                     bpe = 4;
                     break;
 
-                case Format.Y210:
-                case Format.Y216:
+                case DXGI.Format.Y210:
+                case DXGI.Format.Y216:
                     packed = true;
                     bpe = 8;
                     break;
 
-                case Format.NV12:
-                case Format.Opaque420:
+                case DXGI.Format.NV12:
+                case DXGI.Format.Opaque420:
                     planar = true;
                     bpe = 2;
                     break;
 
-                case Format.P010:
-                case Format.P016:
+                case DXGI.Format.P010:
+                case DXGI.Format.P016:
                     planar = true;
                     bpe = 4;
                     break;
@@ -420,7 +421,7 @@ namespace SharpDX.DirectXToolkit {
                 rowBytes = ((width + 1) >> 1) * bpe;
                 numRows = height;
                 numBytes = rowBytes * height;
-            } else if (fmt == Format.NV11) {
+            } else if (fmt == DXGI.Format.NV11) {
                 rowBytes = ((width + 3) >> 2) * 4;
                 numRows = height * 2; // Direct3D makes this simplifying assumption, although it is larger than the 4:1:1 data
                 numBytes = rowBytes * numRows;
@@ -436,14 +437,14 @@ namespace SharpDX.DirectXToolkit {
             }
         }
 
-        private static Result CreateD3DResources(Direct3D11.Device d3dDevice,
+        private static Result CreateD3DResources(Device d3dDevice,
             ResourceDimension resourceDimension,
             int width,
             int height,
             int depth,
             int mipCount,
             int arraySize,
-            Format format,
+            DXGI.Format format,
             ResourceUsage usage,
             BindFlags bindFlags,
             CpuAccessFlags cpuAccessFlags,
@@ -451,7 +452,7 @@ namespace SharpDX.DirectXToolkit {
             bool forceSRGB,
             bool isCubeMap,
             DataBox[] initData,
-            out Direct3D11.Resource texture,
+            out Resource texture,
             out ShaderResourceView textureView) {
             texture = null;
             textureView = null;
@@ -510,7 +511,7 @@ namespace SharpDX.DirectXToolkit {
                             MipLevels = mipCount,
                             ArraySize = arraySize,
                             Format = format,
-                            SampleDescription = new SampleDescription(1, 0),
+                            SampleDescription = new SharpDX.DXGI.SampleDescription(1, 0),
                             Usage = usage,
                             BindFlags = bindFlags,
                             CpuAccessFlags = cpuAccessFlags,

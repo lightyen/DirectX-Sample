@@ -1,12 +1,14 @@
 ﻿using System;
 using System.IO;
+using SharpDX;
+using DXGI = SharpDX.DXGI;
 using SharpDX.Direct3D11;
 using SharpDX.Direct3D;
 using SharpDX.WIC;
 
-namespace SharpDX.DirectXToolkit {
+namespace DirectXToolkit {
 
-    public static partial class DirectXToolkit {
+    public static partial class DirectXTK {
 
         private static ImagingFactory imgFactory;
         private static ImagingFactory ImagingFactory {
@@ -30,7 +32,8 @@ namespace SharpDX.DirectXToolkit {
         /// </summary>
         /// <param name="stream">串流</param>
         /// <param name="device">D3D Device</param>
-        public static void CreateWICTextureFromStream(Direct3D11.Device device, Stream stream, Direct3D11.DeviceContext deviceContext, out Direct3D11.Resource texture, out Direct3D11.ShaderResourceView textureView) {
+        /// <param name="d3dContext">If a Direct3D 11 device context is provided and the current device supports it for the given pixel format, it will auto-generate mipmaps.</param>
+        public static void CreateWICTextureFromStream(Device device, Stream stream, out Resource texture, out ShaderResourceView textureView, DeviceContext d3dContext = null) {
             texture = null;
             textureView = null;
             Guid containerFormatGuid;
@@ -58,7 +61,7 @@ namespace SharpDX.DirectXToolkit {
                     try {
                         decoder.Initialize(wicstream, DecodeOptions.CacheOnDemand);
                         using (var frame = decoder.GetFrame(0)) {
-                            CreateWICTexture(device, frame,
+                            CreateWICTexture(device, d3dContext, frame,
                                     0, ResourceUsage.Default, BindFlags.ShaderResource, CpuAccessFlags.Read, ResourceOptionFlags.None, LoadFlags.Default,
                                     out texture, out textureView);
                         }
@@ -72,7 +75,8 @@ namespace SharpDX.DirectXToolkit {
         /// <summary>
         /// 從WIC Frame建立貼圖資源(非DDS)
         /// </summary>
-        private static Result CreateWICTexture(Direct3D11.Device device, BitmapFrameDecode frame, int maxsize, ResourceUsage usage, BindFlags bind, CpuAccessFlags cpuAccess, ResourceOptionFlags option, LoadFlags load, out Direct3D11.Resource texture, out ShaderResourceView textureView) {
+        /// <param name="d3dContext">If a Direct3D 11 device context is provided and the current device supports it for the given pixel format, it will auto-generate mipmaps.</param>
+        private static Result CreateWICTexture(Device device, DeviceContext d3dContext, BitmapFrameDecode frame, int maxsize, ResourceUsage usage, BindFlags bind, CpuAccessFlags cpuAccess, ResourceOptionFlags option, LoadFlags load, out Resource texture, out ShaderResourceView textureView) {
 
             texture = null;
             textureView = null;
@@ -93,7 +97,7 @@ namespace SharpDX.DirectXToolkit {
                         maxsize = 8192 /*D3D10_REQ_TEXTURE2D_U_OR_V_DIMENSION*/;
                         break;
                     default:
-                        maxsize = Direct3D11.Resource.MaximumTexture2DSize; /*D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION*/
+                        maxsize = Resource.MaximumTexture2DSize; /*D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION*/
                         break;
                 }
             }
@@ -114,7 +118,7 @@ namespace SharpDX.DirectXToolkit {
                 targetSize = frameSize;
             }
 
-            // Determine format
+            #region Determine format
             Guid sourceFormat = frame.PixelFormat;
             Guid targetFormat = sourceFormat;
             DXGI.Format format = sourceFormat.ConvertWICToDXGIFormat();
@@ -122,9 +126,15 @@ namespace SharpDX.DirectXToolkit {
 
             if (format == DXGI.Format.Unknown) {
                 if (sourceFormat == PixelFormat.Format96bppRGBFixedPoint) {
-                    targetFormat = PixelFormat.Format96bppRGBFloat;
-                    format = DXGI.Format.R32G32B32_Float;
-                    bpp = 96;
+                    if (WIC2) {
+                        targetFormat = PixelFormat.Format96bppRGBFloat;
+                        format = DXGI.Format.R32G32B32_Float;
+                        bpp = 96;
+                    } else {
+                        targetFormat = PixelFormat.Format128bppRGBAFloat;
+                        format = DXGI.Format.R32G32B32A32_Float;
+                        bpp = 128;
+                    }
                 } else {
                     targetFormat = sourceFormat.ConvertToNearest();
                     format = targetFormat.ConvertWICToDXGIFormat();
@@ -136,56 +146,55 @@ namespace SharpDX.DirectXToolkit {
                 bpp = PixelFormat.GetBitsPerPixel(sourceFormat);
             }
 
-            //if (format == Format.R32G32B32_Float && deviceContext != null && textureView != null) {
-            //    // Special case test for optional device support for autogen mipchains for R32G32B32_FLOAT 
-
-            //    var formatSupport = device.CheckFormatSupport(Format.R32G32B32_Float);
-
-            //    if (!formatSupport.HasFlag(FormatSupport.MipAutogen)) {
-            //        targetFormat = PixelFormat.Format128bppRGBAFloat;
-            //        format = Format.R32G32B32A32_Float;
-            //        bpp = 128;
-            //    }
-            //}
-
+            if (format == DXGI.Format.R32G32B32_Float && d3dContext != null) {
+                // Special case test for optional device support for autogen mipchains for R32G32B32_FLOAT
+                var formatSupport = device.CheckFormatSupport(format);
+                if (!formatSupport.HasFlag(FormatSupport.MipAutogen)) {
+                    targetFormat = PixelFormat.Format128bppRGBAFloat;
+                    format = DXGI.Format.R32G32B32A32_Float;
+                    bpp = 128;
+                }
+            }
             if (bpp == 0) return Result.Fail;
 
             if (load.HasFlag(LoadFlags.ForceSrgb)) {
                 format = format.MakeSRgb();
             } else if (!load.HasFlag(LoadFlags.ignoreSrgb)) {
+                bool sRGB = false;
                 try {
                     var metareader = frame.MetadataQueryReader;
                     var containerFormat = metareader.ContainerFormat;
 
-                    // Check for sRGB colorspace metadata
-                    bool sRGB = false;
-                    if (metareader.GetMetadataByName("/sRGB/RenderingIntent") != null) {
-                        sRGB = true;
-                    } else if (metareader.GetMetadataByName("System.Image.ColorSpace") != null) {
+                    if (containerFormat == ContainerFormatGuids.Png) {
+                        // Check for sRGB chunk
+                        if (metareader.TryGetMetadataByName("/sRGB/RenderingIntent", out var value) == Result.Ok) {
+                            sRGB = true;
+                        }
+                    } else if (metareader.TryGetMetadataByName("System.Image.ColorSpace", out var value) == Result.Ok) {
                         sRGB = true;
                     }
 
                     if (sRGB) {
                         format = format.MakeSRgb();
                     }
-                } catch (SharpDXException e) {
-                    System.Diagnostics.Debug.WriteLine($"GetMetadataByName: {e.Message}");
+                } catch (SharpDXException) {
+                    // BMP, ICO are not supported.
                 }
             }
 
+            // Verify our target format is supported by the current device
             var support = device.CheckFormatSupport(format);
             if (support.HasFlag(FormatSupport.Texture2D)) {
                 targetFormat = PixelFormat.Format32bppBGRA;
                 format = DXGI.Format.B8G8R8A8_UNorm;
                 bpp = 32;
             }
+            #endregion
 
-            // 開始轉換.....
 
-            int stride = (targetSize.Width * bpp + 7) / 8;
+            int stride = (targetSize.Width * bpp + 7) / 8; // round
             int imageSize = stride * targetSize.Height;
             IntPtr temp = System.Runtime.InteropServices.Marshal.AllocCoTaskMem(imageSize);
-
 
             if (sourceFormat == targetFormat && frameSize == targetSize) { // 不需要格式轉換 且 不需要改變大小
                 frame.CopyPixels(stride, new DataPointer(temp, imageSize));
@@ -226,14 +235,14 @@ namespace SharpDX.DirectXToolkit {
                 }
             }
 
-            bool autogen = false;
-            //if (deviceContext != null && textureView != null) // Must have context and shader-view to auto generate mipmaps
-            //{
-            //    var formatSupport = device.CheckFormatSupport(format);
-            //    if (formatSupport.HasFlag(FormatSupport.MipAutogen)) {
-            //        autogen = true;
-            //    }
-            //}
+            var autogen = false;
+
+            if (d3dContext != null) {
+                var formatSupport = device.CheckFormatSupport(format);
+                if (formatSupport.HasFlag(FormatSupport.MipAutogen)) {
+                    autogen = true;
+                }
+            }
 
             var texture2DDescription = new Texture2DDescription() {
                 Width = targetSize.Width,
@@ -255,9 +264,17 @@ namespace SharpDX.DirectXToolkit {
             }
 
             // 建立Texture2D !!!
-            texture = new Texture2D(device, texture2DDescription, new DataBox[] { new DataBox(temp, stride, imageSize) });
+            if (autogen) {
+                texture = new Texture2D(device, texture2DDescription);
+            } else {
+                texture = new Texture2D(device, texture2DDescription, new DataBox[] { new DataBox(temp, stride, imageSize) });
+            }
 
-            System.Runtime.InteropServices.Marshal.FreeCoTaskMem(temp);
+            if (texture == null) {
+                // 釋放 Unmanaged 資源
+                System.Runtime.InteropServices.Marshal.FreeCoTaskMem(temp);
+                return Result.Fail;
+            }
 
             var SRVDesc = new ShaderResourceViewDescription() {
                 Format = format,
@@ -267,15 +284,28 @@ namespace SharpDX.DirectXToolkit {
 
             textureView = new ShaderResourceView(device, texture, SRVDesc);
 
+            try {
+                if (autogen) {
+                    d3dContext.UpdateSubresource(new DataBox(temp, stride, imageSize), texture, 0);
+                    d3dContext.GenerateMips(textureView);
+                }
+            } finally {
+                // 釋放 Unmanaged 資源
+                System.Runtime.InteropServices.Marshal.FreeCoTaskMem(temp);
+            }
+
             return Result.Ok;
         }
 
-        public static Result SaveTextureToStream(Direct3D11.DeviceContext deviceContext, Direct3D11.Texture2D source, Stream stream, Guid containerFormat, Guid targetFormatGuid) {
+        public static Result SaveTextureToStream(Device d3dDevice, Resource source, Stream stream) {
+            return SaveTextureToStream(d3dDevice, source, stream, ContainerFormatGuids.Png, Guid.Empty);
+        }
 
-            Result result = Result.Ok;
+        public static Result SaveTextureToStream(Device d3dDevice, Resource source, Stream stream, Guid containerFormat, Guid targetFormatGuid) {
 
-            if (source == null || deviceContext == null || stream == null) return Result.InvalidArg;
-            result = CreateStagingTexture(deviceContext, source, out Texture2DDescription desc, out Texture2D staging);
+            Result result = Result.Fail;
+            if (source == null || d3dDevice == null || stream == null) return Result.InvalidArg;
+            result = CreateStagingTexture(d3dDevice.ImmediateContext, source, out Texture2DDescription desc, out Texture2D staging);
             if (!result.Success) return result;
 
             Guid sourceFormat = desc.Format.ConvertDXGIToWICFormat();
@@ -316,6 +346,8 @@ namespace SharpDX.DirectXToolkit {
                 }
             }
 
+            if (targetFormatGuid != Guid.Empty && targetFormatGuid != targetFormat) return result;
+
             try {
                 // Create a new file
                 if (stream.CanWrite) {
@@ -332,9 +364,10 @@ namespace SharpDX.DirectXToolkit {
 
                             if (targetFormatGuid == Guid.Empty || targetFormat == targetFormatGuid) {
                                 int subresource = 0;
-                                
+
                                 // 讓CPU存取顯存貼圖
-                                DataBox db = deviceContext.MapSubresource(staging, subresource, MapMode.Read, MapFlags.None, out var dataStream);
+                                // MapSubresource 在 deferred context 下不支援 MapMode.Read
+                                DataBox db = d3dDevice.ImmediateContext.MapSubresource(staging, subresource, MapMode.Read, MapFlags.None, out var dataStream);
 
                                 if (sourceFormat != targetFormat) {
                                     // BGRA格式轉換
@@ -348,14 +381,16 @@ namespace SharpDX.DirectXToolkit {
                                 } else {
                                     frameEncode.WritePixels(desc.Height, new DataRectangle(db.DataPointer, db.RowPitch));
                                 }
-                                
+
                                 // 控制權歸還
-                                deviceContext.UnmapSubresource(staging, subresource);
+                                d3dDevice.ImmediateContext.UnmapSubresource(staging, subresource);
 
                                 frameEncode.Commit();
                                 encoder.Commit();
+                                result = Result.Ok;
                             }
                         }
+                        
                     }
                 }
             } catch (Exception e) {
@@ -374,7 +409,7 @@ namespace SharpDX.DirectXToolkit {
         /// <param name="source">來源texture</param>
         /// <param name="staging">複本texture</param>
         /// <returns></returns>
-        private static Result CreateStagingTexture(Direct3D11.DeviceContext deviceContext, Direct3D11.Resource source, out Texture2DDescription desc, out Texture2D staging) {
+        private static Result CreateStagingTexture(DeviceContext deviceContext, Resource source, out Texture2DDescription desc, out Texture2D staging) {
             desc = new Texture2DDescription();
             staging = null;
             if (deviceContext == null && source == null) return Result.InvalidArg;
@@ -414,7 +449,7 @@ namespace SharpDX.DirectXToolkit {
 
                 for (int item = 0; item < desc.ArraySize; ++item) {
                     for (int level = 0; level < desc.MipLevels; ++level) {
-                        int index = Direct3D11.Resource.CalculateSubResourceIndex(level, item, desc.MipLevels);
+                        int index = Resource.CalculateSubResourceIndex(level, item, desc.MipLevels);
                         deviceContext.ResolveSubresource(temp, index, source, index, fmt);
                     }
                 }

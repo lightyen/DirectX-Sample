@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using SharpDX.DXGI;
 using System.Runtime.InteropServices;
 using SharpDX.Multimedia;
 
@@ -7,7 +8,7 @@ using SharpDX.Multimedia;
 // https://msdn.microsoft.com/en-us/library/windows/desktop/bb943991(v=vs.85).aspx
 // https://blog.csdn.net/puppet_master/article/details/50186613
 
-namespace SharpDX.DirectXToolkit {
+namespace DirectXToolkit {
     
     [StructLayout(LayoutKind.Sequential)]
     public struct DDS_HEADER {
@@ -72,7 +73,7 @@ namespace SharpDX.DirectXToolkit {
             return RBitMask == r && GBitMask == g && BBitMask == b && ABitMask == a;
         }
 
-        public DXGI.Format Format {
+        public Format Format {
             get {
                 if (flags.HasFlag(DDS_PixelFormat.RGB)) {
 
@@ -81,15 +82,15 @@ namespace SharpDX.DirectXToolkit {
                     switch (RGBBitCount) {
                         case 32:
                             if (IsBitMask(0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000)) {
-                                return DXGI.Format.R8G8B8A8_UNorm;
+                                return Format.R8G8B8A8_UNorm;
                             }
 
                             if (IsBitMask(0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000)) {
-                                return DXGI.Format.B8G8R8A8_UNorm;
+                                return Format.B8G8R8A8_UNorm;
                             }
 
                             if (IsBitMask(0x00ff0000, 0x0000ff00, 0x000000ff, 0x00000000)) {
-                                return DXGI.Format.B8G8R8X8_UNorm;
+                                return Format.B8G8R8X8_UNorm;
                             }
 
                             // No DXGI format maps to ISBITMASK(0x000000ff,0x0000ff00,0x00ff0000,0x00000000) aka D3DFMT_X8B8G8R8
@@ -102,18 +103,18 @@ namespace SharpDX.DirectXToolkit {
 
                             // For 'correct' writers, this should be 0x000003ff,0x000ffc00,0x3ff00000 for RGB data
                             if (IsBitMask(0x3ff00000, 0x000ffc00, 0x000003ff, 0xc0000000)) {
-                                return DXGI.Format.R10G10B10A2_UNorm;
+                                return Format.R10G10B10A2_UNorm;
                             }
 
                             // No DXGI format maps to ISBITMASK(0x000003ff,0x000ffc00,0x3ff00000,0xc0000000) aka D3DFMT_A2R10G10B10
 
                             if (IsBitMask(0x0000ffff, 0xffff0000, 0x00000000, 0x00000000)) {
-                                return DXGI.Format.R16G16_UNorm;
+                                return Format.R16G16_UNorm;
                             }
 
                             if (IsBitMask(0xffffffff, 0x00000000, 0x00000000, 0x00000000)) {
                                 // Only 32-bit color channel format in D3D9 was R32F
-                                return DXGI.Format.R32_Float; // D3DX writes this out as a FourCC of 114
+                                return Format.R32_Float; // D3DX writes this out as a FourCC of 114
                             }
                             break;
                         case 24:
@@ -121,16 +122,16 @@ namespace SharpDX.DirectXToolkit {
                             break;
                         case 16:
                             if (IsBitMask(0x7c00, 0x03e0, 0x001f, 0x8000)) {
-                                return DXGI.Format.B5G5R5A1_UNorm;
+                                return Format.B5G5R5A1_UNorm;
                             }
                             if (IsBitMask(0xf800, 0x07e0, 0x001f, 0x0000)) {
-                                return DXGI.Format.B5G6R5_UNorm;
+                                return Format.B5G6R5_UNorm;
                             }
 
                             // No DXGI format maps to ISBITMASK(0x7c00,0x03e0,0x001f,0x0000) aka D3DFMT_X1R5G5B5
 
                             if (IsBitMask(0x0f00, 0x00f0, 0x000f, 0xf000)) {
-                                return DXGI.Format.B4G4R4A4_UNorm;
+                                return Format.B4G4R4A4_UNorm;
                             }
 
                             // No DXGI format maps to ISBITMASK(0x0f00,0x00f0,0x000f,0x0000) aka D3DFMT_X4R4G4B4
@@ -143,7 +144,7 @@ namespace SharpDX.DirectXToolkit {
                 } else if (flags.HasFlag(DDS_PixelFormat.Luminance)) {
                     if (8 == RGBBitCount) {
                         if (IsBitMask(0x000000ff, 0x00000000, 0x00000000, 0x00000000)) {
-                            return DXGI.Format.R8_UNorm; // D3DX10/11 writes this out as DX10 extension
+                            return Format.R8_UNorm; // D3DX10/11 writes this out as DX10 extension
                         }
 
                         // No DXGI format maps to ISBITMASK(0x0f,0x00,0x00,0xf0) aka D3DFMT_A4L4
@@ -151,99 +152,99 @@ namespace SharpDX.DirectXToolkit {
 
                     if (16 == RGBBitCount) {
                         if (IsBitMask(0x0000ffff, 0x00000000, 0x00000000, 0x00000000)) {
-                            return DXGI.Format.R16_UNorm; // D3DX10/11 writes this out as DX10 extension
+                            return Format.R16_UNorm; // D3DX10/11 writes this out as DX10 extension
                         }
                         if (IsBitMask(0x000000ff, 0x00000000, 0x00000000, 0x0000ff00)) {
-                            return DXGI.Format.R8G8_UNorm; // D3DX10/11 writes this out as DX10 extension
+                            return Format.R8G8_UNorm; // D3DX10/11 writes this out as DX10 extension
                         }
                     }
                 } else if (flags.HasFlag(DDS_PixelFormat.Alpha)) {
                     if (8 == RGBBitCount) {
-                        return DXGI.Format.A8_UNorm;
+                        return Format.A8_UNorm;
                     }
                 } else if (flags.HasFlag(DDS_PixelFormat.FourCC)) {
 
                     if (new FourCC("DXT1") == fourCC) {
-                        return DXGI.Format.BC1_UNorm;
+                        return Format.BC1_UNorm;
                     }
                     if (new FourCC("DXT3") == fourCC) {
-                        return DXGI.Format.BC2_UNorm;
+                        return Format.BC2_UNorm;
                     }
                     if (new FourCC("DXT5") == fourCC) {
-                        return DXGI.Format.BC3_UNorm;
+                        return Format.BC3_UNorm;
                     }
 
                     // While pre-mulitplied alpha isn't directly supported by the DXGI formats,
                     // they are basically the same as these BC formats so they can be mapped
                     if (new FourCC("DXT2") == fourCC) {
-                        return DXGI.Format.BC2_UNorm;
+                        return Format.BC2_UNorm;
                     }
                     if (new FourCC("DXT4") == fourCC) {
-                        return DXGI.Format.BC3_UNorm;
+                        return Format.BC3_UNorm;
                     }
 
                     if (new FourCC("ATI1") == fourCC) {
-                        return DXGI.Format.BC4_UNorm;
+                        return Format.BC4_UNorm;
                     }
                     if (new FourCC("BC4U") == fourCC) {
-                        return DXGI.Format.BC4_UNorm;
+                        return Format.BC4_UNorm;
                     }
                     if (new FourCC("BC4S") == fourCC) {
-                        return DXGI.Format.BC4_SNorm;
+                        return Format.BC4_SNorm;
                     }
 
                     if (new FourCC("ATI2") == fourCC) {
-                        return DXGI.Format.BC5_UNorm;
+                        return Format.BC5_UNorm;
                     }
                     if (new FourCC("BC5U") == fourCC) {
-                        return DXGI.Format.BC5_UNorm;
+                        return Format.BC5_UNorm;
                     }
                     if (new FourCC("BC5S") == fourCC) {
-                        return DXGI.Format.BC5_SNorm;
+                        return Format.BC5_SNorm;
                     }
 
                     // BC6H and BC7 are written using the "DX10" extended header
 
                     if (new FourCC("RGBG") == fourCC) {
-                        return DXGI.Format.R8G8_B8G8_UNorm;
+                        return Format.R8G8_B8G8_UNorm;
                     }
                     if (new FourCC("GRGB") == fourCC) {
-                        return DXGI.Format.G8R8_G8B8_UNorm;
+                        return Format.G8R8_G8B8_UNorm;
                     }
 
                     if (new FourCC("YUY2") == fourCC) {
-                        return DXGI.Format.YUY2;
+                        return Format.YUY2;
                     }
 
                     // Check for D3DFORMAT enums being set here
                     switch ((uint)fourCC) {
                         case 36: // D3DFMT_A16B16G16R16
-                            return DXGI.Format.R16G16B16A16_UNorm;
+                            return Format.R16G16B16A16_UNorm;
 
                         case 110: // D3DFMT_Q16W16V16U16
-                            return DXGI.Format.R16G16B16A16_SNorm;
+                            return Format.R16G16B16A16_SNorm;
 
                         case 111: // D3DFMT_R16F
-                            return DXGI.Format.R16_Float;
+                            return Format.R16_Float;
 
                         case 112: // D3DFMT_G16R16F
-                            return DXGI.Format.R16G16_Float;
+                            return Format.R16G16_Float;
 
                         case 113: // D3DFMT_A16B16G16R16F
-                            return DXGI.Format.R16G16B16A16_Float;
+                            return Format.R16G16B16A16_Float;
 
                         case 114: // D3DFMT_R32F
-                            return DXGI.Format.R32_Float;
+                            return Format.R32_Float;
 
                         case 115: // D3DFMT_G32R32F
-                            return DXGI.Format.R32G32_Float;
+                            return Format.R32G32_Float;
 
                         case 116: // D3DFMT_A32B32G32R32F
-                            return DXGI.Format.R32G32B32A32_Float;
+                            return Format.R32G32B32A32_Float;
                     }
                 }
 
-                return DXGI.Format.Unknown;
+                return Format.Unknown;
             }
         }
     }

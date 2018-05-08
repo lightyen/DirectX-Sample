@@ -13,7 +13,7 @@ using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
-using SharpDX.DirectXToolkit;
+using DirectXToolkit;
 using QRCoder;
 
 namespace MyGame {
@@ -78,11 +78,10 @@ namespace MyGame {
             }
         }
 
-        public void Initialize(Size2 swapChainSize, SwapChainPanel panel) {
+        public void InitializeSwapChain(Size2 swapChainSize, SwapChainPanel panel) {
             if (swapChainSize.Width * swapChainSize.Height <= 0) {
                 throw new SharpDXException(Result.Fail, "DirectXPanel初始化Size有誤");
             }
-
             CreateSwapChain(swapChainSize);
             SetSwapChainTarget(panel);
             TargetSwapChainPanel = panel;
@@ -129,7 +128,7 @@ namespace MyGame {
             };
             DeviceCreationFlags flags = DeviceCreationFlags.BgraSupport;
 #if DEBUG
-            //flags |= DeviceCreationFlags.Debug;
+            flags |= DeviceCreationFlags.Debug;
 #endif
             D3D11Device = new SharpDX.Direct3D11.Device(CurrentAdapter, flags, featureLevels);
 
@@ -262,7 +261,7 @@ namespace MyGame {
 
         public void UpdateQRCode(string message) {
 
-            if (CreateTextureTask == null) {
+            if (CreateTextureTask == null && D3D11Device != null) {
                 (SharpDX.Direct3D11.Resource, ShaderResourceView) func(string msg, SharpDX.Direct3D11.Device device) {
                     ShaderResourceView textureView = null;
                     SharpDX.Direct3D11.Resource texture = null;
@@ -271,7 +270,8 @@ namespace MyGame {
                         PngByteQRCode qrCode = new PngByteQRCode(data);
                         var dataBytes = qrCode.GetGraphic(40);
                         using (var mmStream = new MemoryStream(dataBytes)) {
-                            DirectXToolkit.CreateTexture(device, mmStream, out texture, out textureView);
+
+                            DirectXTK.CreateTexture(device, mmStream, out texture, out textureView);
                         }
                         return (texture, textureView);
                     }
@@ -279,7 +279,7 @@ namespace MyGame {
                 CreateTextureTask = Task.Run(() => { return func(message, D3D11Device); });
             }
         }
-
+       
         private void SetViewport(DeviceContext context) {
             if (ActualSize != NewWindowSize) {
                 if (context != null) {
@@ -290,23 +290,41 @@ namespace MyGame {
         }
 
         public void UpdateFile(StorageFile file) {
-            if (CreateTextureTask == null) {
+            if (CreateTextureTask == null && D3D11Device != null) {
                 (SharpDX.Direct3D11.Resource, ShaderResourceView) func(StorageFile f, SharpDX.Direct3D11.Device device) {
-                    DirectXToolkit.CreateTexture(device, f, out var texture, out var textureView);
+                    DirectXTK.CreateTexture(device, f, out var texture, out var textureView);
                     return (texture, textureView);
                 }
-
+                
                 CreateTextureTask = Task.Run(() => { return func(file, D3D11Device); });
             }    
         }
 
-        public void SaveFile(StorageFile file) {
+        public Result SaveFile(StorageFile file) {
+            Result hr = Result.Fail;
             if (target != null) {
-                saveFile = file;
-            }  
+                var task = file.OpenStreamForWriteAsync();
+                using (var stream = task.Result) {
+                    switch(file.FileType) {
+                        case ".jpg":
+                        case ".jpeg":
+                        case ".jfif":
+                        case ".jpe":
+                            hr = DirectXTK.SaveTextureToStream(D3D11Device, target, stream, SharpDX.WIC.ContainerFormatGuids.Jpeg, Guid.Empty);
+                            break;
+                        default:
+                            hr = DirectXTK.SaveTextureToStream(D3D11Device, target, stream, SharpDX.WIC.ContainerFormatGuids.Png, Guid.Empty);
+                            break;
+                    }
+                    
+                }
+                if (!hr.Success) {
+                    file.DeleteAsync().AsTask().Wait();
+                }
+            }
+            return hr;
         }
 
-        StorageFile saveFile;
         SharpDX.Direct3D11.Resource target;
 
         private void Update() {
@@ -327,14 +345,6 @@ namespace MyGame {
                     target = result.Item1;
                     MainContext?.PixelShader.SetShaderResource(0, textureView);
                 }
-            }
-
-            if (saveFile != null) {
-                var task = saveFile.OpenStreamForWriteAsync();
-                using (var stream = task.Result) {
-                    DirectXToolkit.SaveTextureToStream(D3D11Device.ImmediateContext, target.QueryInterface<Texture2D>(), stream, SharpDX.WIC.ContainerFormatGuids.Png, Guid.Empty);
-                }
-                saveFile = null;
             }
 
             SetViewport(MainContext);
@@ -365,10 +375,10 @@ namespace MyGame {
                 }
 
                 // https://docs.microsoft.com/en-us/windows/uwp/gaming/multisampling--multi-sample-anti-aliasing--in-windows-store-apps
-                using (var BackBuffer = SwapChain.GetBackBuffer<Texture2D>(0)) {
-                    var index = SharpDX.Direct3D11.Resource.CalculateSubResourceIndex(0, 0, 1);
-                    MainContext.ResolveSubresource(offScreenSurface, index, BackBuffer, index, Format.B8G8R8A8_UNorm);
-                }
+                //using (var BackBuffer = SwapChain.GetBackBuffer<Texture2D>(0)) {
+                //    var index = SharpDX.Direct3D11.Resource.CalculateSubResourceIndex(0, 0, 1);
+                //    MainContext.ResolveSubresource(offScreenSurface, index, BackBuffer, index, Format.B8G8R8A8_UNorm);
+                //}
 
                 D2DDraw();
 
