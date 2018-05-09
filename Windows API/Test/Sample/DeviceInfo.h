@@ -55,11 +55,11 @@ public:
 			if (size < (1 << 10)) {
 				VideoMemory.Format(TEXT("%u bytes"), DedicatedVideoMemory);
 			} else if (size < (1 << 20)) {
-				VideoMemory.Format(TEXT("%lf KB"), round(size / (1 << 10)));
+				VideoMemory.Format(TEXT("%.0lf KB"), round(size / (1 << 10)));
 			} else if (size < (1 << 30)) {
 				VideoMemory.Format(TEXT("%.0lf MB"), round(size / (1 << 20)));
 			} else {
-				VideoMemory.Format(TEXT("%lf GB"), round(size / (1 << 30)));
+				VideoMemory.Format(TEXT("%.0lf GB"), round(size / (1 << 30)));
 			}
 
 			return String(TEXT("%s\n%s\n%s\n%s"), D3DVersion().c_str(), Vender().c_str(), Description.c_str(), VideoMemory.c_str());

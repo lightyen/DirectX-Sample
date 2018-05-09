@@ -47,11 +47,11 @@ namespace {
 		}
 
 		void ShowMessage() noexcept {
-			String prev(TEXT("Function:\t%s\nCode:\t0x%08X\n"), FunctionName.c_str(), result);
+			String prev(TEXT("Function:\t%s\nCode:\t0x%08X\nMessage:\t"), FunctionName.c_str(), result);
 			String facility;
 			String desc;
 
-			switch (HRESULT_FACILITY(result)) {
+			/*switch (HRESULT_FACILITY(result)) {
 				case FACILITY_DXGI:
 				{
 					facility.Format(TEXT("Facility:\t%s\n"), TEXT("DXGI"));
@@ -62,44 +62,24 @@ namespace {
 					}
 					break;
 				}
-			}
+			}*/
 
-			if (desc.IsNullOrEmpty()) {
-				switch (result) {
-					case E_ABORT:
-						desc.Format(TEXT("Operation aborted"));
-						break;
-					case E_ACCESSDENIED:
-						desc.Format(TEXT("General access denied error"));
-						break;
-					case E_FAIL:
-						desc.Format(TEXT("Unspecified failure"));
-						break;
-					case E_HANDLE:
-						desc.Format(TEXT("Handle that is not valid"));
-						break;
-					case E_INVALIDARG:
-						desc.Format(TEXT("One or more arguments are not valid"));
-						break;
-					case E_NOINTERFACE:
-						desc.Format(TEXT("No such interface supported"));
-						break;
-					case E_NOTIMPL:
-						desc.Format(TEXT("Not implemented"));
-						break;
-					case E_OUTOFMEMORY:
-						desc.Format(TEXT("Failed to allocate necessary memory"));
-						break;
-					case E_POINTER:
-						desc.Format(TEXT("Pointer that is not valid"));
-						break;
-					case E_UNEXPECTED:
-						desc.Format(TEXT("Unexpected failure"));
-						break;
-				}
-			}
+			LPVOID lpMsgBuf;
+			FormatMessage(
+				FORMAT_MESSAGE_ALLOCATE_BUFFER |
+				FORMAT_MESSAGE_FROM_SYSTEM |
+				FORMAT_MESSAGE_IGNORE_INSERTS,
+				NULL,
+				result,
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+				(LPTSTR)&lpMsgBuf,
+				0, NULL);
 
-			MessageBox(NULL, prev + facility + desc, TEXT("DirectX"), MB_ICONERROR);
+			String error_message((LPTSTR)lpMsgBuf);
+
+			MessageBox(NULL, prev + facility + desc + error_message, TEXT("DirectX"), MB_ICONERROR);
+
+			LocalFree(lpMsgBuf);
 		}
     };
 

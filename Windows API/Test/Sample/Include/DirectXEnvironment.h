@@ -279,7 +279,7 @@ namespace MyGame {
 			//hr = CreateDDSTextureFromFile(D3D11Device.Get(), L"seafloor.dds", nullptr, &ShaderRV);
 			//CHECKRETURN(hr, TEXT("CreateDDSTextureFromFile"));
 
-			hr = CreateWICTextureFromFile(D3D11Device.Get(), L"helloworld.png", nullptr, ShaderRV.ReleaseAndGetAddressOf());
+			hr = CreateWICTextureFromFile(D3D11Device.Get(), L"helloworld.png", nullptr, &resourceView);
 			CHECKRETURN(hr, TEXT("CreateWICTextureFromFile"));
 			D3D11_SAMPLER_DESC sampDesc;
 			ZeroMemory(&sampDesc, sizeof(sampDesc));
@@ -293,9 +293,7 @@ namespace MyGame {
 			hr = D3D11Device->CreateSamplerState(&sampDesc, SamplerState.ReleaseAndGetAddressOf());
 			CHECKRETURN(hr, TEXT("CreateSamplerState"));
 			CurrentContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
-
-
-			CurrentContext->PSSetShaderResources(0, 1, ShaderRV.GetAddressOf());
+			CurrentContext->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
 		}
 
 		private:
@@ -439,6 +437,20 @@ namespace MyGame {
 			HRESULT hr;
 			hr = CreateWICTextureFromMemory(D3D11Device.Get(), data, size, &resource, &resourceView);
 			CHECKRETURN(hr, TEXT("CreateWICTextureFromMemory"));
+
+			D3D11_SAMPLER_DESC sampDesc;
+			ZeroMemory(&sampDesc, sizeof(sampDesc));
+			sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+			sampDesc.MinLOD = 0;
+			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+			hr = D3D11Device->CreateSamplerState(&sampDesc, SamplerState.ReleaseAndGetAddressOf());
+			CHECKRETURN(hr, TEXT("CreateSamplerState"));
+			CurrentContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
+			CurrentContext->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
 		}
 
 		public:
@@ -528,7 +540,7 @@ namespace MyGame {
 			FPSFormat.Reset();
 			DWriteFactory.Reset();
 			SamplerState.Reset();
-			ShaderRV.Reset();
+			resourceView.Reset();
 			IndexBuffer.Reset();
 			VertexBuffer.Reset();
 			PixelShader.Reset();
@@ -563,7 +575,8 @@ namespace MyGame {
 
 		ComPtr<ID3D11Buffer> VertexBuffer;
 		ComPtr<ID3D11Buffer> IndexBuffer;
-		ComPtr<ID3D11ShaderResourceView> ShaderRV;
+		ComPtr<ID3D11Resource> resource;
+		ComPtr<ID3D11ShaderResourceView> resourceView;
 		ComPtr<ID3D11SamplerState> SamplerState;
 
 		bool TearingSupport = false; // 支援關閉垂直同步
