@@ -754,7 +754,7 @@ HRESULT DirectX::CreateWICTextureFromMemoryEx(ID3D11Device* d3dDevice,
 
     // Initialize WIC
     ComPtr<IWICBitmapDecoder> decoder;
-    hr = pWIC->CreateDecoderFromStream(stream.Get(), 0, WICDecodeMetadataCacheOnDemand, decoder.GetAddressOf());
+    hr = pWIC->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.GetAddressOf());
     if (FAILED(hr))
         return hr;
 

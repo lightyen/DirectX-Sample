@@ -43,7 +43,7 @@ namespace Sample {
                     if (os.Version < new Version("6.1.7601.0")) return;
 
                     try {
-                        xPanel.InitializeSwapChain(new SharpDX.Size2(1920, 1080), this);
+                        xPanel.CreateSwapChain(new SharpDX.Size2(1920, 1080), this);
                         xPanel.SetView((float)ActualWidth, (float)ActualHeight);
                         DirectXEnabled = true;
                     } catch (Exception) {

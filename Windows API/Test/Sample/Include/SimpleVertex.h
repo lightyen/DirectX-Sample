@@ -1,7 +1,8 @@
 #pragma once
 #include <DirectXMath.h>
+using namespace DirectX;
 
-namespace DirectX {
+namespace MyGame {
 	struct SimpleVertex {
 		XMFLOAT4 Position;
 		XMFLOAT4 Color;

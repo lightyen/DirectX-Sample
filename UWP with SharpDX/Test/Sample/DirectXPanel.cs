@@ -78,7 +78,7 @@ namespace MyGame {
             }
         }
 
-        public void InitializeSwapChain(Size2 swapChainSize, SwapChainPanel panel) {
+        public void CreateSwapChain(Size2 swapChainSize, SwapChainPanel panel) {
             if (swapChainSize.Width * swapChainSize.Height <= 0) {
                 throw new SharpDXException(Result.Fail, "DirectXPanel初始化Size有誤");
             }

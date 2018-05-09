@@ -19,6 +19,9 @@
     <Filter Include="DirectXTK">
       <UniqueIdentifier>{c8cb34a8-5441-41c0-b7e2-0fe139bd95b2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="標頭檔\Include">
+      <UniqueIdentifier>{3eafd783-a2c1-4982-a916-2b6bf06965d9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Sample.rc">
@@ -163,25 +166,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Include\DirectXEnvironment.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="Include\Exception.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="Include\Shader.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="Include\SimpleVertex.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="Include\String.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
     <ClInclude Include="resource.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="Include\registry.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
     <ClInclude Include="Sample.h">
@@ -234,6 +219,30 @@
     </ClInclude>
     <ClInclude Include="DirectXTK\Src\vbo.h">
       <Filter>DirectXTK</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\DirectXEnvironment.h">
+      <Filter>標頭檔\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\SimpleVertex.h">
+      <Filter>標頭檔\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\Shader.h">
+      <Filter>標頭檔\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\registry.h">
+      <Filter>標頭檔\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\String.h">
+      <Filter>標頭檔\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\Exception.h">
+      <Filter>標頭檔\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectX.h">
+      <Filter>標頭檔</Filter>
+    </ClInclude>
+    <ClInclude Include="DeviceInfo.h">
+      <Filter>標頭檔</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -149,6 +149,8 @@
     <ClCompile Include="stdafx.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DeviceInfo.h" />
+    <ClInclude Include="DirectX.h" />
     <ClInclude Include="DirectXTK\Src\AlignedNew.h" />
     <ClInclude Include="DirectXTK\Src\Bezier.h" />
     <ClInclude Include="DirectXTK\Src\BinaryReader.h" />

@@ -202,6 +202,10 @@ public:
 		return length;
 	}
 
+	bool IsNullOrEmpty() const {
+		return length == 0;
+	}
+
 	void Format(LPCTSTR format, ...)
 	{
 		size_t remainSize;
