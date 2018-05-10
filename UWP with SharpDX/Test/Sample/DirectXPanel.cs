@@ -289,15 +289,14 @@ namespace MyGame {
             }
         }
 
+        bool updateFileFlag = false;
+        StorageFile updateFile = null;
+
         public void UpdateFile(StorageFile file) {
-            if (CreateTextureTask == null && D3D11Device != null) {
-                (SharpDX.Direct3D11.Resource, ShaderResourceView) func(StorageFile f, SharpDX.Direct3D11.Device device) {
-                    DirectXTK.CreateTexture(device, f, out var texture, out var textureView);
-                    return (texture, textureView);
-                }
-                
-                CreateTextureTask = Task.Run(() => { return func(file, D3D11Device); });
-            }    
+            if (updateFileFlag == false) {
+                updateFileFlag = true;
+                updateFile = file;
+            }
         }
 
         public Result SaveFile(StorageFile file) {
@@ -338,7 +337,12 @@ namespace MyGame {
                 fpsTimer.Start();
             }
 
-            if (CreateTextureTask != null && CreateTextureTask.IsCompletedSuccessfully) {
+            if (updateFileFlag) {
+                DirectXTK.CreateTexture(D3D11Device, updateFile, out var texture, out var textureView, D3D11Device.ImmediateContext);
+                updateFile = null;
+                updateFileFlag = false;
+                MainContext?.PixelShader.SetShaderResource(0, textureView);
+            } else if (CreateTextureTask != null && CreateTextureTask.IsCompletedSuccessfully) {
                 var result = CreateTextureTask.Result;
                 CreateTextureTask = null;
                 if (result.Item1 is SharpDX.Direct3D11.Resource texture && result.Item2 is ShaderResourceView textureView) {
@@ -416,13 +420,13 @@ namespace MyGame {
             float height = 1080.0f;
 
             var vertices = new SimpleVertex[] {
-                new SimpleVertex { Position = new Vector4(0.0f, height * 0.6f, 1.0f, 1.0f), Color = new Vector4(1.0f, 0.0f, 0.0f, 1.0f), TexCoord = new Vector2(0.0f, 0.0f)},
+                new SimpleVertex { Position = new Vector4(0.0f, height * 0.4f, 0.8f, 1.0f), Color = new Vector4(1.0f, 0.0f, 0.0f, 1.0f), TexCoord = new Vector2(0.0f, 0.0f)},
 
-                new SimpleVertex { Position = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), Color = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), TexCoord = new Vector2(0.0f, 1.0f)},
+                new SimpleVertex { Position = new Vector4(0.0f, 0.0f, 0.8f, 1.0f), Color = new Vector4(0.0f, 0.0f, 1.0f, 1.0f), TexCoord = new Vector2(0.0f, 1.0f)},
 
-                new SimpleVertex { Position = new Vector4(width * 0.6f, 0.0f, 1.0f, 1.0f), Color = new Vector4(0.0f, 1.0f, 0.0f, 1.0f), TexCoord = new Vector2(1.0f, 1.0f)},
+                new SimpleVertex { Position = new Vector4(width * 0.4f, 0.0f, 0.8f, 1.0f), Color = new Vector4(0.0f, 1.0f, 0.0f, 1.0f), TexCoord = new Vector2(1.0f, 1.0f)},
 
-                new SimpleVertex { Position = new Vector4(width * 0.6f, height * 0.6f, 1.0f, 1.0f), Color = new Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexCoord = new Vector2(1.0f, 0.0f)},
+                new SimpleVertex { Position = new Vector4(width * 0.4f, height * 0.4f, 0.8f, 1.0f), Color = new Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexCoord = new Vector2(1.0f, 0.0f)},
             };
 
             // CreateBuffer 在記憶體

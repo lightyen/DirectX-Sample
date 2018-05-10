@@ -184,9 +184,9 @@ namespace DirectXToolkit {
 
             // Verify our target format is supported by the current device
             var support = device.CheckFormatSupport(format);
-            if (support.HasFlag(FormatSupport.Texture2D)) {
-                targetFormat = PixelFormat.Format32bppBGRA;
-                format = DXGI.Format.B8G8R8A8_UNorm;
+            if (!support.HasFlag(FormatSupport.Texture2D)) {
+                targetFormat = PixelFormat.Format32bppRGBA;
+                format = DXGI.Format.R8G8B8A8_UNorm;
                 bpp = 32;
             }
             #endregion
@@ -247,7 +247,7 @@ namespace DirectXToolkit {
             var texture2DDescription = new Texture2DDescription() {
                 Width = targetSize.Width,
                 Height = targetSize.Height,
-                MipLevels = autogen ? 3 : 1,
+                MipLevels = autogen ? 0 : 1,
                 ArraySize = 1,
                 Format = format,
                 SampleDescription = new DXGI.SampleDescription(1, 0),
@@ -278,20 +278,7 @@ namespace DirectXToolkit {
             }
 
             if (result.Success) {
-                try {
-                    if (autogen) {
-                        // problem
-                        DataBox data = new DataBox(temp, stride, imageSize);
-                        d3dContext.UpdateSubresource(data, texture);
-                    }
-                } catch (Exception e) {
-                    System.Diagnostics.Debug.WriteLine(e.ToString());
-                    Utilities.Dispose(ref texture);
-                    result = Result.Fail;
-                }
-            }
 
-            if (result.Success) {
                 var SRVDesc = new ShaderResourceViewDescription() {
                     Format = format,
                     Dimension = ShaderResourceViewDimension.Texture2D,
@@ -301,6 +288,8 @@ namespace DirectXToolkit {
                 try {
                     textureView = new ShaderResourceView(device, texture, SRVDesc);
                     if (autogen) {
+                        DataBox data = new DataBox(temp, stride, imageSize);
+                        d3dContext.UpdateSubresource(data, texture);
                         d3dContext.GenerateMips(textureView);
                     }
                 } catch (Exception e) {

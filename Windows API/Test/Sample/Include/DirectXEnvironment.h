@@ -303,10 +303,10 @@ namespace MyGame {
 				HRESULT hr;
 				SimpleVertex vertices[] =
 				{
-					XMFLOAT4(-0.2f, 0.4f, 0.5f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
-					XMFLOAT4(0.2f, 0.4f, 0.5f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
-					XMFLOAT4(-0.2f, -0.4f, 0.5f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
-					XMFLOAT4(0.2f, -0.4f, 0.5f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
+					XMFLOAT4(-0.2f, 0.4f, 0.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
+					XMFLOAT4(0.2f, 0.4f, 0.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
+					XMFLOAT4(-0.2f, -0.4f, 0.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
+					XMFLOAT4(0.2f, -0.4f, 0.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
 				};
 
 				D3D11_BUFFER_DESC bd;
@@ -434,7 +434,7 @@ namespace MyGame {
 		void CreateTexture(LPCTSTR filename) {
 			ComPtr<ID3D11ShaderResourceView> resourceView;
 			HRESULT hr;
-			hr = CreateWICTextureFromFile(D3D11Device.Get(), filename, nullptr, &resourceView);
+			hr = CreateWICTextureFromFile(D3D11Device.Get(), ImmediateContext.Get(), filename, nullptr, &resourceView);
 			CHECKRETURN(hr, TEXT("CreateWICTextureFromFile"));
 
 			D3D11_SAMPLER_DESC sampDesc;
@@ -455,7 +455,7 @@ namespace MyGame {
 		void CreateWICTexture(byte* data, size_t size) {
 			ComPtr<ID3D11ShaderResourceView> resourceView;
 			HRESULT hr;
-			hr = CreateWICTextureFromMemory(D3D11Device.Get(), data, size, nullptr, &resourceView);
+			hr = CreateWICTextureFromMemory(D3D11Device.Get(), ImmediateContext.Get(), data, size, nullptr, &resourceView);
 			CHECKRETURN(hr, TEXT("CreateWICTextureFromMemory"));
 
 			D3D11_SAMPLER_DESC sampDesc;
@@ -493,48 +493,46 @@ namespace MyGame {
 
 			if (GetOpenFileName(&ofn)) {
 
-				//HANDLE hFile = CreateFile(ofn.lpstrFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-				//if (hFile) {
-				//	LARGE_INTEGER fileSize;
-				//	GetFileSizeEx(hFile, &fileSize);
-				//	DWORD size = fileSize.LowPart;
-				//	HGLOBAL hData = GlobalAlloc(GMEM_FIXED, size);
-				//	if (hData) {
-				//		DWORD nRead;
-				//		if (ReadFile(hFile, hData, size, &nRead, NULL)) {
-				//			CreateTexture((BYTE*)hData, size);
-				//		}
-				//		GlobalFree(hData);
-				//	}
-				//	CloseHandle(hFile);
-				//}
-
-				FILE* file;
-				errno_t err = _tfopen_s(&file, ofn.lpstrFile, TEXT("r"));
-				if (err == 0) {
-					fseek(file, 0, SEEK_END);
-					long len = 0;
-					len = ftell(file);
-					rewind(file);
-					
-					long test = 0; 
-					
-					size_t l = len;
-					char* buffer = new char[l];
-					char* b = buffer;
-					char buf[1024];
-					size_t nread;
-					while (!feof(file)) {
-						test = ftell(file);
-						nread = fread(buf, 1, 1024, file);
-						for (int i = 0; i < nread; i++) b[i] = buf[i];
-						b += nread;
-						l -= nread;
+				HANDLE hFile = CreateFile(ofn.lpstrFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+				if (hFile) {
+					LARGE_INTEGER fileSize;
+					GetFileSizeEx(hFile, &fileSize);
+					DWORD size = fileSize.LowPart;
+					HGLOBAL hData = GlobalAlloc(GMEM_FIXED, size);
+					if (hData) {
+						DWORD nRead;
+						if (ReadFile(hFile, hData, size, &nRead, NULL)) {
+							CreateTexture((BYTE*)hData, size);
+						}
+						GlobalFree(hData);
 					}
-					fclose(file);
-					CreateTexture((BYTE*)buffer, len);
-					delete[] buffer;
+					CloseHandle(hFile);
 				}
+
+				//FILE* file;
+				//errno_t err = _tfopen_s(&file, ofn.lpstrFile, TEXT("rb"));
+				//if (err == 0) {
+
+				//	fseek(file, 0, SEEK_END);
+				//	long len = 0;
+				//	len = ftell(file);
+				//	rewind(file);
+
+				//	char* buffer = new char[len];
+				//	char* b = buffer;
+				//	size_t _len = len;
+				//	size_t nread;
+
+				//	while (_len) {
+				//		nread = fread(b, 1, _len, file);
+				//		b += nread;
+				//		_len -= nread;
+				//	}
+				//	
+				//	fclose(file);
+				//	CreateTexture((BYTE*)buffer, len);
+				//	delete[] buffer;
+				//}
 			}
 		}
 
