@@ -27,7 +27,7 @@
 #include "pch.h"
 
 #include "WICTextureLoader.h"
-
+#include <Shlwapi.h>
 #include "DirectXHelpers.h"
 #include "PlatformHelpers.h"
 #include "LoaderHelpers.h"
@@ -744,19 +744,40 @@ HRESULT DirectX::CreateWICTextureFromMemoryEx(ID3D11Device* d3dDevice,
 
     // Create input stream for memory
     ComPtr<IWICStream> stream;
-    HRESULT hr = pWIC->CreateStream(stream.GetAddressOf());
+    HRESULT hr = pWIC->CreateStream(&stream);
     if (FAILED(hr))
         return hr;
 
-    hr = stream->InitializeFromMemory(const_cast<uint8_t*>(wicData), static_cast<DWORD>(wicDataSize));
+    hr = stream->InitializeFromMemory(const_cast<BYTE*>(wicData), static_cast<DWORD>(wicDataSize));
     if (FAILED(hr))
         return hr;
+
+	//IStream* is;
+	//hr = CreateStreamOnHGlobal((HGLOBAL)wicData, false, &is);
+	//if (FAILED(hr))
+	//	return hr;
+
+	//hr = stream->InitializeFromIStream(is);
+	//if (FAILED(hr))
+	//	return hr;
 
     // Initialize WIC
     ComPtr<IWICBitmapDecoder> decoder;
-    hr = pWIC->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand, decoder.GetAddressOf());
-    if (FAILED(hr))
-        return hr;
+	hr = pWIC->CreateDecoderFromStream(stream.Get(), &GUID_VendorMicrosoft, WICDecodeMetadataCacheOnDemand, &decoder);
+	if (FAILED(hr))
+		return hr;
+	
+	//hr = pWIC->CreateDecoderFromFilename(TEXT("C:/Users/lightyen/Pictures/15244J0Y-11.png"), &GUID_VendorMicrosoft, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
+	//if (FAILED(hr))
+	//	return hr;
+
+	//hr = decoder->Initialize(stream.Get(), WICDecodeMetadataCacheOnDemand);
+	//if (FAILED(hr))
+	//	return hr;
+
+    //hr = pWIC->CreateDecoderFromStream(stream.Get(), &GUID_ContainerFormatPng, WICDecodeMetadataCacheOnDemand, &decoder);
+    //if (FAILED(hr))
+    //    return hr;
 
     ComPtr<IWICBitmapFrameDecode> frame;
     hr = decoder->GetFrame(0, frame.GetAddressOf());

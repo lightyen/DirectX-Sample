@@ -345,7 +345,7 @@ namespace MyGame {
 				// Set primitive topology
 				CurrentContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				Test();
+				// Test();
 
 				time = std::chrono::system_clock::now();
 			}
@@ -431,11 +431,31 @@ namespace MyGame {
 			}
 		}
 
-		void CreateWICTexture(byte* data, size_t size) {
-			ComPtr<ID3D11Resource> resource;
+		void CreateTexture(LPCTSTR filename) {
 			ComPtr<ID3D11ShaderResourceView> resourceView;
 			HRESULT hr;
-			hr = CreateWICTextureFromMemory(D3D11Device.Get(), data, size, &resource, &resourceView);
+			hr = CreateWICTextureFromFile(D3D11Device.Get(), filename, nullptr, &resourceView);
+			CHECKRETURN(hr, TEXT("CreateWICTextureFromFile"));
+
+			D3D11_SAMPLER_DESC sampDesc;
+			ZeroMemory(&sampDesc, sizeof(sampDesc));
+			sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+			sampDesc.MinLOD = 0;
+			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+			hr = D3D11Device->CreateSamplerState(&sampDesc, SamplerState.ReleaseAndGetAddressOf());
+			CHECKRETURN(hr, TEXT("CreateSamplerState"));
+			CurrentContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
+			CurrentContext->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
+		}
+
+		void CreateWICTexture(byte* data, size_t size) {
+			ComPtr<ID3D11ShaderResourceView> resourceView;
+			HRESULT hr;
+			hr = CreateWICTextureFromMemory(D3D11Device.Get(), data, size, nullptr, &resourceView);
 			CHECKRETURN(hr, TEXT("CreateWICTextureFromMemory"));
 
 			D3D11_SAMPLER_DESC sampDesc;
@@ -472,19 +492,47 @@ namespace MyGame {
 			ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST;
 
 			if (GetOpenFileName(&ofn)) {
-				LPTSTR a = ofn.lpstrFile;
+
+				//HANDLE hFile = CreateFile(ofn.lpstrFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+				//if (hFile) {
+				//	LARGE_INTEGER fileSize;
+				//	GetFileSizeEx(hFile, &fileSize);
+				//	DWORD size = fileSize.LowPart;
+				//	HGLOBAL hData = GlobalAlloc(GMEM_FIXED, size);
+				//	if (hData) {
+				//		DWORD nRead;
+				//		if (ReadFile(hFile, hData, size, &nRead, NULL)) {
+				//			CreateTexture((BYTE*)hData, size);
+				//		}
+				//		GlobalFree(hData);
+				//	}
+				//	CloseHandle(hFile);
+				//}
+
 				FILE* file;
-				
-				errno_t err = _tfopen_s(&file, a, TEXT("r"));
+				errno_t err = _tfopen_s(&file, ofn.lpstrFile, TEXT("r"));
 				if (err == 0) {
-					long len = 0;
 					fseek(file, 0, SEEK_END);
+					long len = 0;
 					len = ftell(file);
-					fseek(file, 0, SEEK_SET);
-					uint8_t* buffer = new uint8_t[len];
-					fread(buffer, sizeof(uint8_t), len, file);
+					rewind(file);
+					
+					long test = 0; 
+					
+					size_t l = len;
+					char* buffer = new char[l];
+					char* b = buffer;
+					char buf[1024];
+					size_t nread;
+					while (!feof(file)) {
+						test = ftell(file);
+						nread = fread(buf, 1, 1024, file);
+						for (int i = 0; i < nread; i++) b[i] = buf[i];
+						b += nread;
+						l -= nread;
+					}
 					fclose(file);
-					CreateTexture(buffer, len);
+					CreateTexture((BYTE*)buffer, len);
 					delete[] buffer;
 				}
 			}

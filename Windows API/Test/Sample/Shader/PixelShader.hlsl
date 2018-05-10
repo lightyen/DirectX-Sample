@@ -10,5 +10,6 @@ struct PixelShaderInput {
 
 float4 main(PixelShaderInput input) : SV_TARGET
 {
-    return input.color * haha.Sample(samLinear, input.tex);
+    float4 t = haha.Sample(samLinear, input.tex);
+    return t;
 }

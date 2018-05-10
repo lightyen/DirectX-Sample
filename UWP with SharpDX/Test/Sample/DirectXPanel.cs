@@ -292,7 +292,7 @@ namespace MyGame {
         public void UpdateFile(StorageFile file) {
             if (CreateTextureTask == null && D3D11Device != null) {
                 (SharpDX.Direct3D11.Resource, ShaderResourceView) func(StorageFile f, SharpDX.Direct3D11.Device device) {
-                    DirectXTK.CreateTexture(device, f, out var texture, out var textureView, D3D11Device.ImmediateContext);
+                    DirectXTK.CreateTexture(device, f, out var texture, out var textureView);
                     return (texture, textureView);
                 }
                 
