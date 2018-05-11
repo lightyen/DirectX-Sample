@@ -1,19 +1,22 @@
 #pragma once
+#include <Windows.h>
+#include <commdlg.h>
 #include <chrono>
-using namespace std::chrono;
-#include <windows.h>
 #include <vector>
 #include <wrl\client.h>
-using namespace Microsoft::WRL;
 #include "DirectX.h"
-using namespace DirectX;
 #include <wincodec.h>
 #include "DeviceInfo.h"
 #include "SimpleVertex.h"
 #include "Shader.h"
 #include "registry.h"
-#include "WICTextureLoader.h"
+#include "DirectXTK\Inc\WICTextureLoader.h"
+#include "Exception.h"
 
+
+using namespace std::chrono;
+using namespace DirectX;
+using namespace Microsoft::WRL;
 #define CHECKRETURN(a,b) if (CheckFailed(a,b)) { \
 	return; \
 }
@@ -49,8 +52,9 @@ namespace MyGame {
 		// 測試看是否支援關閉垂直同步
 		int allowTearing = 0;
 		dxgi5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
-		if (allowTearing == 1) TearingSupport = true;
-
+		if (allowTearing) {
+			Tearing = TearingSupport = true;
+		}
 		// 選擇繪圖介面卡
 		ComPtr<IDXGIAdapter> adapter = FindAdapter();
 		if (adapter == nullptr) {
@@ -129,9 +133,9 @@ namespace MyGame {
 						}
 					}
 				}
-
+				
 				RECT rect;
-				GetClientRect(hWnd, &rect);
+				GetClientRect(hwnd, &rect);
 				ZeroMemory(&SwapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC1));
 				SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
 				SwapChainDesc.BufferCount = 2;
@@ -150,6 +154,10 @@ namespace MyGame {
 				CHECKRETURN(hr, TEXT("Create SwapChain1"));
 
 				CreateD2DDeviceContextFromSwapChain(SwapChain);
+
+				if (!Tearing) {
+					CheckMenuItem(GetMenu(hWnd), IDM_TEARING, MF_CHECKED);
+				}
 			}
 		}
 
@@ -263,11 +271,22 @@ namespace MyGame {
 				// Set the input layout
 				CurrentContext->IASetInputLayout(VertexLayout.Get());
 
+				// Load Shader bytecode
 				ShaderCode pixelShaderCode;
 				pixelShaderCode.LoadFromFile(TEXT("PixelShader.cso"));
-				hr = D3D11Device->CreatePixelShader(pixelShaderCode.Code, pixelShaderCode.Length, nullptr, PixelShader.ReleaseAndGetAddressOf());
+
+				// Get Shader Reflection
+				hr = D3DReflect(pixelShaderCode.Code, pixelShaderCode.Length, IID_PPV_ARGS(&Reflector));
+				CHECKRETURN(hr, TEXT("Create Shader Reflection"));
+				D3D11_SHADER_DESC shaderDesc;
+				hr = Reflector->GetDesc(&shaderDesc);
+				CHECKRETURN(hr, TEXT("Get Shader Description"));
+
+				// Create Shader
+				hr = D3D11Device->CreatePixelShader(pixelShaderCode.Code, pixelShaderCode.Length, nullptr, &PixelShader);
 				CHECKRETURN(hr, TEXT("CreatePixelShader"));
 
+				// Set Shader
 				CurrentContext->VSSetShader(VertexShader.Get(), nullptr, 0);
 				CurrentContext->PSSetShader(PixelShader.Get(), nullptr, 0);
 			}
@@ -335,12 +354,26 @@ namespace MyGame {
 				indexDesc.Usage = D3D11_USAGE_DEFAULT;
 				indexDesc.CPUAccessFlags = 0;
 
+				// Set IndexBuffer
 				D3D11_SUBRESOURCE_DATA indexsrd;
 				ZeroMemory(&indexsrd, sizeof(indexsrd));
 				indexsrd.pSysMem = indices;
-				hr = D3D11Device->CreateBuffer(&indexDesc, &indexsrd, IndexBuffer.ReleaseAndGetAddressOf());
+				hr = D3D11Device->CreateBuffer(&indexDesc, &indexsrd, &IndexBuffer);
 				CHECKRETURN(hr, TEXT("Create IndexBuffer"));
 				CurrentContext->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+				// Set Transform
+				XMMATRIX transform = XMMatrixIdentity();
+				D3D11_BUFFER_DESC constDesc;
+				ZeroMemory(&constDesc, sizeof(constDesc));
+				constDesc.ByteWidth = sizeof(XMMATRIX);
+				constDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+				constDesc.Usage = D3D11_USAGE_DEFAULT;
+				constDesc.CPUAccessFlags = 0;
+				hr = D3D11Device->CreateBuffer(&constDesc, NULL, &ConstantBuffer);
+				CHECKRETURN(hr, TEXT("Create ConstBuffer"));
+				CurrentContext->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
+				CurrentContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
 
 				// Set primitive topology
 				CurrentContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -365,7 +398,7 @@ namespace MyGame {
 				CheckFailed(hr, TEXT("Create Info TextFormat"));
 				hr = DWriteFactory->CreateTextFormat(TEXT("微軟正黑體"), nullptr, DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 24.0f, TEXT("zh-TW"), FPSFormat.ReleaseAndGetAddressOf());
 				CheckFailed(hr, TEXT("Create FPS TextFormat"));
-				hr = D2DDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::AliceBlue), TextBrush.GetAddressOf());
+				hr = D2DDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Crimson), TextBrush.GetAddressOf());
 				CheckFailed(hr, TEXT("Create Text Brush"));
 			}
 		}
@@ -373,29 +406,54 @@ namespace MyGame {
 		private:
 		void Direct2DRneder() {
 			D2DDeviceContext->BeginDraw();
-				const String info = Info->ToString();
-				if (!info.IsNullOrEmpty()) {
-					LPCTSTR str = info.c_str();
-					D2D1_RECT_F layoutRect = { 0, 0, 300, 300 };
-					D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), InfoTextFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
-				}
+			const String info = Info->ToString();
+			if (!info.IsNullOrEmpty()) {
+				LPCTSTR str = info.c_str();
+				D2D1_RECT_F layoutRect = { 0, 0, 300, 300 };
+				D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), InfoTextFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
+			}
 
-				if (!(fpsString.IsNullOrEmpty())) {
-					LPCTSTR str = fpsString.c_str();
-					D2D1_RECT_F layoutRect = { 0, (FLOAT)SwapChainDesc.Height - 30, 300, (FLOAT)SwapChainDesc.Height };
-					D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), FPSFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
-				}
+			if (!(fpsString.IsNullOrEmpty())) {
+				LPCTSTR str = fpsString.c_str();
+				D2D1_RECT_F layoutRect = { 0, (FLOAT)SwapChainDesc.Height - 30, 300, (FLOAT)SwapChainDesc.Height };
+				D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), FPSFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
+			}
 			D2DDeviceContext->EndDraw();
 		}
 
 		public:
 		void Update() {
+			MSG msg;
+			if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+				if (msg.message == WM_KEYDOWN) {
+					switch (LOBYTE(msg.wParam))
+					{
+						case 'W':
+							offsetY += 0.05f;
+							break;
+						case 'S':
+							offsetY -= 0.05f;
+							break;
+						case 'A':
+							offsetX -= 0.05f;
+							break;
+						case 'D':
+							offsetX += 0.05f;
+							break;
+					}
+
+					XMMATRIX transform = XMMatrixTranslation(offsetX, offsetY, 0.0f);
+					CurrentContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
+				}
+				
+			}
+
 			auto now = std::chrono::system_clock::now();
 			auto elapsed = now - time;
 			auto count = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
 			if (count > 100) {
 				double fps = 1000.0 * fpsCounter / count;
-				fpsString.Format(TEXT("%.1lf"), fps);
+				fpsString.Format(TEXT("%.2lf"), fps);
 				fpsCounter = 0;
 				time = now;
 			}
@@ -409,15 +467,40 @@ namespace MyGame {
 				// 注意這裡是GetAddressOf,而不是ReleaseAndGetAddressOf
 				CurrentContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
 				// 填滿背景色
-				CurrentContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::Black);
+				CurrentContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::CornflowerBlue);
 
 				CurrentContext->DrawIndexed(6, 0, 0);
 
 				Direct2DRneder();
 
 				// 把畫好的結果輸出到螢幕上！
-				SwapChain->Present(0, TearingSupport ? DXGI_PRESENT_ALLOW_TEARING : 0);
+				SwapChain->Present(0, Tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 			}
+		}
+
+		public:
+		HANDLE StartGameLoop(HANDLE keyDownEvent) {
+			if (Running == false) {
+				Running = true;
+				KeyDownEvent = keyDownEvent;
+				return CreateThread(NULL, 0, GameLoop, this, 0, NULL);
+			}
+			return NULL;
+		}
+
+		public:
+		void StopGameLoop() {
+			Running = false;
+		}
+
+		private:
+		static DWORD WINAPI GameLoop(PVOID pParam) {
+			DirectXPanel* _this = (DirectXPanel*)pParam;
+			while (_this->Running) {
+				_this->Update();
+				_this->Render();
+			}
+			return 0;
 		}
 
 		private:
@@ -439,14 +522,14 @@ namespace MyGame {
 
 			D3D11_SAMPLER_DESC sampDesc;
 			ZeroMemory(&sampDesc, sizeof(sampDesc));
-			sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+			sampDesc.Filter = D3D11_FILTER_ANISOTROPIC;
 			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 			sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 			sampDesc.MinLOD = 0;
 			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-			hr = D3D11Device->CreateSamplerState(&sampDesc, SamplerState.ReleaseAndGetAddressOf());
+			hr = D3D11Device->CreateSamplerState(&sampDesc, &SamplerState);
 			CHECKRETURN(hr, TEXT("CreateSamplerState"));
 			CurrentContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
 			CurrentContext->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
@@ -471,6 +554,7 @@ namespace MyGame {
 			CHECKRETURN(hr, TEXT("CreateSamplerState"));
 			CurrentContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
 			CurrentContext->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
+
 		}
 
 		public:
@@ -481,7 +565,7 @@ namespace MyGame {
 			ofn.nMaxFile = 1 * MAX_PATH;
 			ofn.lpstrFile = new TCHAR[ofn.nMaxFile];
 			ofn.lpstrFile[0] = TEXT('\0');
-			ofn.lpstrFilter = TEXT("Files(*.png;*.jpg)\0*.png;*.jpg\0\0");
+			ofn.lpstrFilter = TEXT("Image Files\0*.png;*.jpg;*.bmp\0\0");
 
 			DWORD len;
 			GetPathMyPictures(NULL, &len);
@@ -534,6 +618,14 @@ namespace MyGame {
 				//	delete[] buffer;
 				//}
 			}
+		}
+
+		public:
+		bool ToggleTearing() {
+			if (TearingSupport) {
+				Tearing = !Tearing;
+			}
+			return Tearing;
 		}
 
 		private:
@@ -618,14 +710,18 @@ namespace MyGame {
 		ComPtr<ID3D11InputLayout> VertexLayout;
 		ComPtr<ID3D11VertexShader> VertexShader;
 		ComPtr<ID3D11PixelShader> PixelShader;
+		ComPtr<ID3D11ShaderReflection> Reflector;
 
 		ComPtr<ID3D11Buffer> VertexBuffer;
 		ComPtr<ID3D11Buffer> IndexBuffer;
+		ComPtr<ID3D11Buffer> ConstantBuffer;
 		ComPtr<ID3D11Resource> resource;
 		ComPtr<ID3D11ShaderResourceView> resourceView;
 		ComPtr<ID3D11SamplerState> SamplerState;
 
+		bool Running = false;
 		bool TearingSupport = false; // 支援關閉垂直同步
+		bool Tearing = false;
 
 		ComPtr<IDWriteFactory> DWriteFactory;
 		ComPtr<IDWriteTextFormat> FPSFormat;
@@ -638,5 +734,9 @@ namespace MyGame {
 		int fpsCounter = 0;
 		time_point<system_clock> time;
 		String fpsString;
+
+		float offsetY = 0.0f;
+		float offsetX = 0.0f;
+		HANDLE KeyDownEvent;
 	};
 }

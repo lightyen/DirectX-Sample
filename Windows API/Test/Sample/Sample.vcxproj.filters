@@ -238,11 +238,11 @@
     <ClInclude Include="Include\Exception.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
-    <ClInclude Include="DirectX.h">
-      <Filter>標頭檔</Filter>
+    <ClInclude Include="Include\DirectX.h">
+      <Filter>標頭檔\Include</Filter>
     </ClInclude>
-    <ClInclude Include="DeviceInfo.h">
-      <Filter>標頭檔</Filter>
+    <ClInclude Include="Include\DeviceInfo.h">
+      <Filter>標頭檔\Include</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

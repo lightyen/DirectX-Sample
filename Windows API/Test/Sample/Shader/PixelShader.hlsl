@@ -1,4 +1,8 @@
-
+// b    Constant Buffer
+// t    Texture and Texture Buffer
+// c    Buffer Offset
+// s    Sampler
+// u    Unordered Access View
 Texture2D haha : register(t0);
 SamplerState samLinear : register(s0);
 

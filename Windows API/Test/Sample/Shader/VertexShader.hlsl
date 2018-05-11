@@ -12,10 +12,16 @@ struct PixelShaderInput
     float2 tex : TEXCOORD0;
 };
 
+cbuffer ConstantBuffer
+{
+    float4x4 Transform;
+}
+
 PixelShaderInput main(VertexShaderInput input)
 {
     PixelShaderInput output = (PixelShaderInput) 0;
-    output.position = input.position;
+    output.position = mul(Transform, input.position);
+    // output.position = input.position;
     output.color = input.color;
     output.tex = input.tex;
 	return output;

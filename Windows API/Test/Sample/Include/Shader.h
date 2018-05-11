@@ -1,9 +1,7 @@
 #pragma once
 
-#include "stdafx.h"
 #include <stdio.h>
 #include <d3dcompiler.h>
-
 
 class ShaderCode {
 
