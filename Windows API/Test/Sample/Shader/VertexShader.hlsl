@@ -21,7 +21,6 @@ PixelShaderInput main(VertexShaderInput input)
 {
     PixelShaderInput output = (PixelShaderInput) 0;
     output.position = mul(Transform, input.position);
-    // output.position = input.position;
     output.color = input.color;
     output.tex = input.tex;
 	return output;
