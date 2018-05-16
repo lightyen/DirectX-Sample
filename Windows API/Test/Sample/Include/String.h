@@ -3,13 +3,6 @@
 // https://en.wikipedia.org/wiki/C%2B%2B11#Rvalue_references_and_move_constructors
 // https://msdn.microsoft.com/zh-tw/library/dd293665.aspx
 
-#include <windows.h>
-#include <Shlwapi.h>
-#include <Strsafe.h>
-#include <memory>
-#include <utility>
-using namespace std;
-
 #define BUFFER_MAX_CCH 0xFFFF
 
 namespace {

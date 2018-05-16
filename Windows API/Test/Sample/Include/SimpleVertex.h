@@ -1,6 +1,4 @@
 #pragma once
-#include <DirectXMath.h>
-using namespace DirectX;
 
 namespace MyGame {
 	struct SimpleVertex {

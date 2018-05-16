@@ -1,8 +1,5 @@
 #pragma once
 
-#include <stdio.h>
-#include <d3dcompiler.h>
-
 class ShaderCode {
 
 public:

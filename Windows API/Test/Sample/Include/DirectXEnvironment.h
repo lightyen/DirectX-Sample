@@ -1,29 +1,19 @@
 #pragma once
-#include <Windows.h>
-#include <commdlg.h>
-#include <chrono>
+
 #include <vector>
-#include <wrl\client.h>
-#include "DirectX.h"
-#include <wincodec.h>
+#include <chrono>
+using namespace std::chrono;
+
 #include "DeviceInfo.h"
 #include "SimpleVertex.h"
 #include "Shader.h"
-#include "registry.h"
-#include "DirectXTK\Inc\WICTextureLoader.h"
+#include "Registry.h"
 #include "Exception.h"
 
-
-using namespace std::chrono;
-using namespace DirectX;
-using namespace Microsoft::WRL;
-#define CHECKRETURN(a,b) if (CheckFailed(a,b)) { \
-	return; \
-}
+#define CHECKRETURN(a,b) if(CheckFailed(a,b)){return;}
 
 namespace MyGame {
 
-	
 	class DirectXPanel {
 
 		public:
@@ -32,7 +22,7 @@ namespace MyGame {
 		// 在此線程初始化 COM 組件調用模式，並且設定同步/非同步類型
 		hr = CoInitializeEx(nullptr, COINITBASE_MULTITHREADED);
 		CHECKRETURN(hr, TEXT("CoInitialize"));
-
+		
 		hr = CoCreateInstance(
 			CLSID_WICImagingFactory,
 			NULL,
@@ -49,18 +39,15 @@ namespace MyGame {
 		CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
 		DXGIFactory = dxgi5;
 
-		// 測試看是否支援關閉垂直同步
-		int allowTearing = 0;
-		dxgi5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
-		if (allowTearing) {
-			Tearing = TearingSupport = true;
-		}
+		// 測試看看是否支援關閉垂直同步
+		dxgi5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &TearingSupport, sizeof(TearingSupport));
+
 		// 選擇繪圖介面卡
 		ComPtr<IDXGIAdapter> adapter = FindAdapter();
 		if (adapter == nullptr) {
 			CHECKRETURN(E_FAIL, TEXT("FindAdapter"));
 		}
-
+			
 		CreateDevice(adapter);
 	}
 
@@ -89,12 +76,12 @@ namespace MyGame {
 					flags,
 					featureLevels, ARRAYSIZE(featureLevels),
 					D3D11_SDK_VERSION,
-					D3D11Device.ReleaseAndGetAddressOf(), &FeatureLevel, ImmediateContext.ReleaseAndGetAddressOf());
+					&D3D11Device, &FeatureLevel, &ImmediateContext);
 
 				if (hr == E_INVALIDARG) {
 					// DirectX 11.0 認不得 D3D_FEATURE_LEVEL_11_1 所以需要排除他,然後再試一次
 					hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, &featureLevels[1], ARRAYSIZE(featureLevels) - 1,
-						D3D11_SDK_VERSION, D3D11Device.ReleaseAndGetAddressOf(), &FeatureLevel, ImmediateContext.ReleaseAndGetAddressOf());
+						D3D11_SDK_VERSION, &D3D11Device, &FeatureLevel, &ImmediateContext);
 					CHECKRETURN(hr, TEXT("D3D11CreateDevice"));
 					CurrentContext = ImmediateContext;
 				} else if (hr == E_FAIL) {
@@ -111,6 +98,12 @@ namespace MyGame {
 				Info->DeviceId = desc.DeviceId;
 				Info->DedicatedVideoMemory = desc.DedicatedVideoMemory;
 				Info->Description = desc.Description;
+
+				for (int i = 1; i <= 128; i = i << 1) {
+					UINT MsaaQuality;
+					hr = D3D11Device->CheckMultisampleQualityLevels(DXGI_FORMAT_B8G8R8A8_UNORM, i, &MsaaQuality);
+					MsaaQualities.push_back(MsaaQuality);
+				}
 			}
 		}
 
@@ -140,8 +133,16 @@ namespace MyGame {
 				SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
 				SwapChainDesc.BufferCount = 2;
 				SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+				if (MsaaQualities[2]) {
+					SwapChainDesc.SampleDesc.Count = 1 << 2;
+					SwapChainDesc.SampleDesc.Quality = MsaaQualities[2] - 1;
+				}
+				else {
+					
+				}
 				SwapChainDesc.SampleDesc.Count = 1;
 				SwapChainDesc.SampleDesc.Quality = 0;
+
 				SwapChainDesc.Scaling = DXGI_SCALING_STRETCH;
 				SwapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
 				SwapChainDesc.Width = rect.right - rect.left;
@@ -196,7 +197,7 @@ namespace MyGame {
 				ComPtr<IDXGISurface> backBuffer;
 				hr = SwapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
 				CHECKRETURN(hr, TEXT("Create D2D1Device"));
-
+				
 				D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1();
 				// 設定可以被 DeviceContext 使用, 但不能拿來當成 input
 				bitmapProperties.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
@@ -237,8 +238,8 @@ namespace MyGame {
 				RECT rect;
 				GetClientRect(hWnd, &rect);
 				D3D11_VIEWPORT vp;
-				vp.Width = (FLOAT)(rect.right - rect.left);
-				vp.Height = (FLOAT)(rect.bottom - rect.top);
+				vp.Width = ceilf((float)rect.right - (float)rect.left);
+				vp.Height = ceilf((float)rect.bottom - (float)rect.top);
 				vp.MinDepth = 0.0f;
 				vp.MaxDepth = 1.0f;
 				vp.TopLeftX = 0;
@@ -289,6 +290,12 @@ namespace MyGame {
 				// Set Shader
 				CurrentContext->VSSetShader(VertexShader.Get(), nullptr, 0);
 				CurrentContext->PSSetShader(PixelShader.Get(), nullptr, 0);
+
+				//ShaderCode shaderCode;
+				//shaderCode.LoadFromFile(TEXT("Sample.cso"));
+				//ComPtr<ID3D11VertexShader> shader;
+				//hr = D3D11Device->CreateVertexShader(shaderCode.Code, shaderCode.Length, nullptr, &shader);
+				//CHECKRETURN(hr, TEXT("Create Sample.fx VertexShader"));
 			}
 		}
 
@@ -320,20 +327,26 @@ namespace MyGame {
 			// Create vertex buffer
 			if (CurrentContext.Get()) {
 				HRESULT hr;
+
+				RECT rect;
+				GetClientRect(hWnd, &rect);
+				float w = (float)rect.right - (float)rect.left;
+				float h = (float)rect.bottom - (float)rect.top;
+
 				SimpleVertex vertices[] =
 				{
-					XMFLOAT4(-0.2f, 0.4f, 0.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
-					XMFLOAT4(0.2f, 0.4f, 0.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
-					XMFLOAT4(-0.2f, -0.4f, 0.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
-					XMFLOAT4(0.2f, -0.4f, 0.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
+					XMFLOAT4(-w / 2.0f, h / 2.0f, 10.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
+					XMFLOAT4(w / 2.0f, h / 2.0f, 10.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
+					XMFLOAT4(-w / 2.0f, -h / 2.0f, 10.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
+					XMFLOAT4(w / 2.0f, -h / 2.0f, 10.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
 				};
 
 				D3D11_BUFFER_DESC bd;
 				ZeroMemory(&bd, sizeof(bd));
-				//bd.Usage = D3D11_USAGE_DEFAULT;
+				bd.Usage = D3D11_USAGE_DEFAULT;
 				bd.ByteWidth = sizeof(SimpleVertex) * ARRAYSIZE(vertices);
 				bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-				//bd.CPUAccessFlags = 0;
+				bd.CPUAccessFlags = 0;
 				D3D11_SUBRESOURCE_DATA srd;
 				ZeroMemory(&srd, sizeof(srd));
 				srd.pSysMem = vertices;
@@ -363,7 +376,6 @@ namespace MyGame {
 				CurrentContext->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 
 				// Set Transform
-				XMMATRIX transform = XMMatrixIdentity();
 				D3D11_BUFFER_DESC constDesc;
 				ZeroMemory(&constDesc, sizeof(constDesc));
 				constDesc.ByteWidth = sizeof(XMMATRIX);
@@ -373,6 +385,21 @@ namespace MyGame {
 				hr = D3D11Device->CreateBuffer(&constDesc, NULL, &ConstantBuffer);
 				CHECKRETURN(hr, TEXT("Create ConstBuffer"));
 				CurrentContext->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
+
+				world = XMMatrixIdentity();
+
+				eye = XMFLOAT3(0.05f, 0.0f, -5.0f);
+				focus = XMFLOAT3(0.0f, 0.0f, 15.5f);
+				up = XMFLOAT3(0.0f, 1.0f, 0.0f);
+				view = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&focus), XMLoadFloat3(&up));
+
+				float width = ceilf(((float)rect.right - (float)rect.left) / 2.0f);
+				float height = ceilf(((float)rect.bottom - (float)rect.top) / 2.0f);
+				float nearZ = 5.0f, farZ = 100.0f;
+				projection = XMMatrixPerspectiveLH(width, height, nearZ, farZ);
+
+				// 設置變換矩陣給Shader
+				XMMATRIX transform = world * view * projection;
 				CurrentContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
 
 				// Set primitive topology
@@ -380,7 +407,7 @@ namespace MyGame {
 
 				// Test();
 
-				time = std::chrono::system_clock::now();
+				time = system_clock::now();
 			}
 		}
 
@@ -405,52 +432,80 @@ namespace MyGame {
 
 		private:
 		void Direct2DRneder() {
-			D2DDeviceContext->BeginDraw();
-			const String info = Info->ToString();
-			if (!info.IsNullOrEmpty()) {
-				LPCTSTR str = info.c_str();
-				D2D1_RECT_F layoutRect = { 0, 0, 300, 300 };
-				D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), InfoTextFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
-			}
+			if (D2DDeviceContext.Get()) {
+				D2DDeviceContext->BeginDraw();
+				const String info = Info->ToString();
+				if (!info.IsNullOrEmpty()) {
+					LPCTSTR str = info.c_str();
+					D2D1_RECT_F layoutRect = { 0, 0, 300, 300 };
+					D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), InfoTextFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
+				}
 
-			if (!(fpsString.IsNullOrEmpty())) {
-				LPCTSTR str = fpsString.c_str();
-				D2D1_RECT_F layoutRect = { 0, (FLOAT)SwapChainDesc.Height - 30, 300, (FLOAT)SwapChainDesc.Height };
-				D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), FPSFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
+				if (!(fpsString.IsNullOrEmpty())) {
+					LPCTSTR str = fpsString.c_str();
+					D2D1_RECT_F layoutRect = { 0, (FLOAT)SwapChainDesc.Height - 30, 300, (FLOAT)SwapChainDesc.Height };
+					D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), FPSFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
+				}
+				D2DDeviceContext->EndDraw();
 			}
-			D2DDeviceContext->EndDraw();
+		}
+
+		private:
+		void HandleUserControl() {
+			MSG msg;
+			if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+				float offsetX = 0.0f, offsetY = 0.0f;
+
+				switch (msg.message) {
+				case WM_KEYDOWN:
+				{
+					switch (LOBYTE(msg.wParam))
+					{
+					case 'W':
+						offsetY = 10.0f;
+						break;
+					case 'S':
+						offsetY = -10.0f;
+						break;
+					case 'A':
+						offsetX = -10.0f;
+						break;
+					case 'D':
+						offsetX = 10.0f;
+						break;
+					case VK_PROCESSKEY: // IME key
+						break;
+					default:
+						break;
+					}
+					world = world * XMMatrixTranslation(offsetX, offsetY, 0.0f);
+				}
+				break;
+				case WM_CHAR:
+					OutputDebug(TEXT("Char = %c\n"), LODWORD(msg.wParam));
+					break;
+				case WM_MOUSEWHEEL:
+				{
+					auto x = (SHORT)HIWORD(msg.wParam) / 120;
+					eye.z += (float)x;
+					view = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&focus), XMLoadFloat3(&up));
+					OutputDebug(TEXT("Wheel = %d\n"), x);
+				}
+					break;
+				}
+
+				XMMATRIX transform;
+				transform = world * view * projection;
+				CurrentContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
+			}
 		}
 
 		public:
 		void Update() {
-			MSG msg;
-			if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-				if (msg.message == WM_KEYDOWN) {
-					switch (LOBYTE(msg.wParam))
-					{
-						case 'W':
-							offsetY += 0.05f;
-							break;
-						case 'S':
-							offsetY -= 0.05f;
-							break;
-						case 'A':
-							offsetX -= 0.05f;
-							break;
-						case 'D':
-							offsetX += 0.05f;
-							break;
-					}
-
-					XMMATRIX transform = XMMatrixTranslation(offsetX, offsetY, 0.0f);
-					CurrentContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
-				}
-				
-			}
-
-			auto now = std::chrono::system_clock::now();
+			HandleUserControl();
+			auto now = system_clock::now();
 			auto elapsed = now - time;
-			auto count = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+			auto count = duration_cast<milliseconds>(elapsed).count();
 			if (count > 100) {
 				double fps = 1000.0 * fpsCounter / count;
 				fpsString.Format(TEXT("%.2lf"), fps);
@@ -462,12 +517,12 @@ namespace MyGame {
 
 		public:
 		void Render() {
-			if (CurrentContext.Get()) {
+			if (CurrentContext.Get() && SwapChain.Get()) {
 				// 把RenderTargetView綁定到Output-Merger Stage
 				// 注意這裡是GetAddressOf,而不是ReleaseAndGetAddressOf
 				CurrentContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
 				// 填滿背景色
-				CurrentContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::CornflowerBlue);
+				CurrentContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::CadetBlue);
 
 				CurrentContext->DrawIndexed(6, 0, 0);
 
@@ -512,27 +567,6 @@ namespace MyGame {
 					CreateWICTexture(data, len);
 				}
 			}
-		}
-
-		void CreateTexture(LPCTSTR filename) {
-			ComPtr<ID3D11ShaderResourceView> resourceView;
-			HRESULT hr;
-			hr = CreateWICTextureFromFile(D3D11Device.Get(), ImmediateContext.Get(), filename, nullptr, &resourceView);
-			CHECKRETURN(hr, TEXT("CreateWICTextureFromFile"));
-
-			D3D11_SAMPLER_DESC sampDesc;
-			ZeroMemory(&sampDesc, sizeof(sampDesc));
-			sampDesc.Filter = D3D11_FILTER_ANISOTROPIC;
-			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-			sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-			sampDesc.MinLOD = 0;
-			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-			hr = D3D11Device->CreateSamplerState(&sampDesc, &SamplerState);
-			CHECKRETURN(hr, TEXT("CreateSamplerState"));
-			CurrentContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
-			CurrentContext->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
 		}
 
 		void CreateWICTexture(byte* data, size_t size) {
@@ -694,10 +728,11 @@ namespace MyGame {
 
 		private:
 		HWND hWnd;
-		/// 關於ComPtr, 建立新的東西就用ReleaseAndGetAddressOf() 也即 '&'; 如果只是想要參考那就用GetAddressOf()
+		/// 關於ComPtr, 建立新的東西就用ReleaseAndGetAddressOf() 等同於 '&'; 如果只是想要參考那就用GetAddressOf()
 		ComPtr<IDXGIFactory> DXGIFactory;
 		D3D_FEATURE_LEVEL FeatureLevel;
 		ComPtr<ID3D11Device> D3D11Device;
+		std::vector<UINT> MsaaQualities;
 			
 		ComPtr<ID3D11DeviceContext> ImmediateContext;
 		ComPtr<ID3D11DeviceContext> CurrentContext;
@@ -719,8 +754,8 @@ namespace MyGame {
 		ComPtr<ID3D11ShaderResourceView> resourceView;
 		ComPtr<ID3D11SamplerState> SamplerState;
 
+		BOOL TearingSupport = false;
 		bool Running = false;
-		bool TearingSupport = false; // 支援關閉垂直同步
 		bool Tearing = false;
 
 		ComPtr<IDWriteFactory> DWriteFactory;
@@ -734,9 +769,12 @@ namespace MyGame {
 		int fpsCounter = 0;
 		time_point<system_clock> time;
 		String fpsString;
-
-		float offsetY = 0.0f;
-		float offsetX = 0.0f;
+		XMMATRIX world = XMMatrixIdentity();
+		XMMATRIX view = XMMatrixIdentity();
+		XMMATRIX projection = XMMatrixIdentity();
 		HANDLE KeyDownEvent;
+		XMFLOAT3 eye;
+		XMFLOAT3 focus;
+		XMFLOAT3 up;
 	};
 }

@@ -9,9 +9,9 @@
 
 光是要在螢幕上顯示個三角形就弄到快吐血，初始化DirectX環境就不知道寫了幾百行。但也沒有想過要買書，畢竟只是一時興趣。
 
-這個呢主要想用的版本是DirectX 11.1，通常windows 8以上應該會自帶DirectX 11.1(吧?，windows 7則需要SP1。
+這個呢主要想用的版本是DirectX 11，通常windows 8.1以上應該會自帶DirectX 11(吧?，windows 7則需要SP1。
 
-當然UWP是不能跑在Windows 7上的，想玩的話就更新吧更新吧更新吧更新吧。
+當然UWP是不能跑在Windows 7上的，想用的話就更新吧更新吧更新吧更新吧。
 
 ## 程式碼目錄
 
@@ -25,3 +25,10 @@ C++的用的是傳統WinAPI視窗，執行速度較快，但開發環境複雜�
 
 C#用的是UWP搭配SharpDX來實作的，執行速度不差，且有managed code可以幫助記憶體回收；缺點是SharpDX學習不易，官方文件缺乏，需要熟悉過C++的開發才比較容易上手。
 
+
+
+## 延伸閱讀
+
+[Where is the DirectX SDK?](https://msdn.microsoft.com/en-us/library/windows/desktop/ee663275(v=vs.85).aspx)
+
+[Windows10 SDK](https://developer.microsoft.com/zh-tw/windows/downloads/windows-10-sdk)

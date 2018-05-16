@@ -51,14 +51,11 @@
     <FxCompile Include="Shader\VertexShader.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
+    <FxCompile Include="Shader\Sample.fx">
+      <Filter>Shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Sample.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="stdafx.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
     <ClCompile Include="DirectXTK\Src\WICTextureLoader.cpp">
       <Filter>DirectXTK</Filter>
     </ClCompile>
@@ -137,9 +134,6 @@
     <ClCompile Include="DirectXTK\Src\PBREffect.cpp">
       <Filter>DirectXTK</Filter>
     </ClCompile>
-    <ClCompile Include="DirectXTK\Src\pch.cpp">
-      <Filter>DirectXTK</Filter>
-    </ClCompile>
     <ClCompile Include="DirectXTK\Src\PrimitiveBatch.cpp">
       <Filter>DirectXTK</Filter>
     </ClCompile>
@@ -163,6 +157,12 @@
     </ClCompile>
     <ClCompile Include="DirectXTK\Src\VertexTypes.cpp">
       <Filter>DirectXTK</Filter>
+    </ClCompile>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>標頭檔</Filter>
+    </ClCompile>
+    <ClCompile Include="Sample.cpp">
+      <Filter>來源檔案</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -205,9 +205,6 @@
     <ClInclude Include="DirectXTK\Src\LoaderHelpers.h">
       <Filter>DirectXTK</Filter>
     </ClInclude>
-    <ClInclude Include="DirectXTK\Src\pch.h">
-      <Filter>DirectXTK</Filter>
-    </ClInclude>
     <ClInclude Include="DirectXTK\Src\PlatformHelpers.h">
       <Filter>DirectXTK</Filter>
     </ClInclude>
@@ -229,19 +226,19 @@
     <ClInclude Include="Include\Shader.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
-    <ClInclude Include="Include\registry.h">
-      <Filter>標頭檔\Include</Filter>
-    </ClInclude>
     <ClInclude Include="Include\String.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
     <ClInclude Include="Include\Exception.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
-    <ClInclude Include="Include\DirectX.h">
+    <ClInclude Include="Include\DeviceInfo.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
-    <ClInclude Include="Include\DeviceInfo.h">
+    <ClInclude Include="DirectX.h">
+      <Filter>標頭檔</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\Registry.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,5 +1,5 @@
 #pragma once
-#include "DirectX.h"
+
 #include "String.h"
 
 class DeviceInfo {
