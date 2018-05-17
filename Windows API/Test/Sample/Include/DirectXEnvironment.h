@@ -1,9 +1,4 @@
 #pragma once
-
-#include <vector>
-#include <chrono>
-using namespace std::chrono;
-
 #include "DeviceInfo.h"
 #include "SimpleVertex.h"
 #include "Shader.h"
@@ -83,10 +78,12 @@ namespace MyGame {
 					hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, &featureLevels[1], ARRAYSIZE(featureLevels) - 1,
 						D3D11_SDK_VERSION, &D3D11Device, &FeatureLevel, &ImmediateContext);
 					CHECKRETURN(hr, TEXT("D3D11CreateDevice"));
-					CurrentContext = ImmediateContext;
 				} else if (hr == E_FAIL) {
 					CHECKRETURN(E_FAIL, TEXT("D3D11CreateDevice"));
 				}
+
+				hr = D3D11Device->CreateDeferredContext(0, &DeferredContext);
+				CHECKRETURN(hr, TEXT("CreateDeferredContext"));				
 
 				DXGI_ADAPTER_DESC desc;
 				ZeroMemory(&desc, sizeof(desc));
@@ -122,7 +119,8 @@ namespace MyGame {
 						hr = ImmediateContext->QueryInterface(IID_PPV_ARGS(&dc1));
 						if (SUCCEEDED(hr)) {
 							ImmediateContext = dc1;
-							CurrentContext = ImmediateContext;
+							//CurrentContext = ImmediateContext;
+							CurrentContext = DeferredContext;
 						}
 					}
 				}
@@ -238,12 +236,12 @@ namespace MyGame {
 				RECT rect;
 				GetClientRect(hWnd, &rect);
 				D3D11_VIEWPORT vp;
+				vp.TopLeftX = 0;
+				vp.TopLeftY = 0;
 				vp.Width = ceilf((float)rect.right - (float)rect.left);
 				vp.Height = ceilf((float)rect.bottom - (float)rect.top);
 				vp.MinDepth = 0.0f;
 				vp.MaxDepth = 1.0f;
-				vp.TopLeftX = 0;
-				vp.TopLeftY = 0;
 				CurrentContext->RSSetViewports(1, &vp);
 			}
 		}
@@ -277,14 +275,14 @@ namespace MyGame {
 				pixelShaderCode.LoadFromFile(TEXT("PixelShader.cso"));
 
 				// Get Shader Reflection
-				hr = D3DReflect(pixelShaderCode.Code, pixelShaderCode.Length, IID_PPV_ARGS(&Reflector));
+				hr = D3DReflect(pixelShaderCode, pixelShaderCode, IID_PPV_ARGS(&Reflector));
 				CHECKRETURN(hr, TEXT("Create Shader Reflection"));
 				D3D11_SHADER_DESC shaderDesc;
 				hr = Reflector->GetDesc(&shaderDesc);
 				CHECKRETURN(hr, TEXT("Get Shader Description"));
 
 				// Create Shader
-				hr = D3D11Device->CreatePixelShader(pixelShaderCode.Code, pixelShaderCode.Length, nullptr, &PixelShader);
+				hr = D3D11Device->CreatePixelShader(pixelShaderCode, pixelShaderCode, nullptr, &PixelShader);
 				CHECKRETURN(hr, TEXT("CreatePixelShader"));
 
 				// Set Shader
@@ -405,9 +403,8 @@ namespace MyGame {
 				// Set primitive topology
 				CurrentContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				// Test();
-
-				time = system_clock::now();
+				QueryPerformanceCounter(&time);
+				QueryPerformanceFrequency(&freq);
 			}
 		}
 
@@ -503,11 +500,13 @@ namespace MyGame {
 		public:
 		void Update() {
 			HandleUserControl();
-			auto now = system_clock::now();
-			auto elapsed = now - time;
-			auto count = duration_cast<milliseconds>(elapsed).count();
-			if (count > 100) {
-				double fps = 1000.0 * fpsCounter / count;
+			LARGE_INTEGER now;
+			QueryPerformanceCounter(&now);			
+			__int64 ElapsedCount = (now.QuadPart - time.QuadPart);
+			double Elapsed = ElapsedCount * 1000.0 / freq.QuadPart;
+			const double UpdatePeriod = 200.0;
+			if (Elapsed > UpdatePeriod) {
+				double fps = 1000.0 * fpsCounter / Elapsed;
 				fpsString.Format(TEXT("%.2lf"), fps);
 				fpsCounter = 0;
 				time = now;
@@ -526,6 +525,10 @@ namespace MyGame {
 
 				CurrentContext->DrawIndexed(6, 0, 0);
 
+				ComPtr<ID3D11CommandList> cmdList;
+				CurrentContext->FinishCommandList(TRUE, &cmdList);
+				ImmediateContext->ExecuteCommandList(cmdList.Get(), FALSE);
+
 				Direct2DRneder();
 
 				// 把畫好的結果輸出到螢幕上！
@@ -534,10 +537,9 @@ namespace MyGame {
 		}
 
 		public:
-		HANDLE StartGameLoop(HANDLE keyDownEvent) {
+		HANDLE StartGameLoop() {
 			if (Running == false) {
 				Running = true;
-				KeyDownEvent = keyDownEvent;
 				return CreateThread(NULL, 0, GameLoop, this, 0, NULL);
 			}
 			return NULL;
@@ -735,6 +737,7 @@ namespace MyGame {
 		std::vector<UINT> MsaaQualities;
 			
 		ComPtr<ID3D11DeviceContext> ImmediateContext;
+		ComPtr<ID3D11DeviceContext> DeferredContext;
 		ComPtr<ID3D11DeviceContext> CurrentContext;
 		ComPtr<IDXGISwapChain1> SwapChain;
 		DXGI_SWAP_CHAIN_DESC1 SwapChainDesc;
@@ -767,12 +770,12 @@ namespace MyGame {
 
 		unique_ptr<DeviceInfo> Info;
 		int fpsCounter = 0;
-		time_point<system_clock> time;
+		LARGE_INTEGER time;
+		LARGE_INTEGER freq;
 		String fpsString;
 		XMMATRIX world = XMMatrixIdentity();
 		XMMATRIX view = XMMatrixIdentity();
 		XMMATRIX projection = XMMatrixIdentity();
-		HANDLE KeyDownEvent;
 		XMFLOAT3 eye;
 		XMFLOAT3 focus;
 		XMFLOAT3 up;
