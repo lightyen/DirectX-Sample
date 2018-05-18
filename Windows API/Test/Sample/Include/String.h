@@ -3,6 +3,8 @@
 // https://en.wikipedia.org/wiki/C%2B%2B11#Rvalue_references_and_move_constructors
 // https://msdn.microsoft.com/zh-tw/library/dd293665.aspx
 
+#include "stdafx.h"
+
 #define BUFFER_MAX_CCH 0xFFFF
 
 namespace {

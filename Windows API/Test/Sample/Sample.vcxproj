@@ -116,58 +116,13 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="DirectXTK\Src\AlphaTestEffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\BasicEffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\BasicPostProcess.cpp" />
-    <ClCompile Include="DirectXTK\Src\BinaryReader.cpp" />
-    <ClCompile Include="DirectXTK\Src\CommonStates.cpp" />
     <ClCompile Include="DirectXTK\Src\DDSTextureLoader.cpp" />
-    <ClCompile Include="DirectXTK\Src\DebugEffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\DGSLEffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\DGSLEffectFactory.cpp" />
-    <ClCompile Include="DirectXTK\Src\DualPostProcess.cpp" />
-    <ClCompile Include="DirectXTK\Src\DualTextureEffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\EffectCommon.cpp" />
-    <ClCompile Include="DirectXTK\Src\EffectFactory.cpp" />
-    <ClCompile Include="DirectXTK\Src\EnvironmentMapEffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\GeometricPrimitive.cpp" />
-    <ClCompile Include="DirectXTK\Src\Geometry.cpp" />
-    <ClCompile Include="DirectXTK\Src\GraphicsMemory.cpp" />
-    <ClCompile Include="DirectXTK\Src\Keyboard.cpp" />
-    <ClCompile Include="DirectXTK\Src\Model.cpp" />
-    <ClCompile Include="DirectXTK\Src\ModelLoadCMO.cpp" />
-    <ClCompile Include="DirectXTK\Src\ModelLoadSDKMESH.cpp" />
-    <ClCompile Include="DirectXTK\Src\ModelLoadVBO.cpp" />
-    <ClCompile Include="DirectXTK\Src\Mouse.cpp" />
-    <ClCompile Include="DirectXTK\Src\NormalMapEffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\PBREffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\PrimitiveBatch.cpp" />
-    <ClCompile Include="DirectXTK\Src\ScreenGrab.cpp" />
-    <ClCompile Include="DirectXTK\Src\SimpleMath.cpp" />
-    <ClCompile Include="DirectXTK\Src\SkinnedEffect.cpp" />
-    <ClCompile Include="DirectXTK\Src\SpriteBatch.cpp" />
-    <ClCompile Include="DirectXTK\Src\SpriteFont.cpp" />
-    <ClCompile Include="DirectXTK\Src\ToneMapPostProcess.cpp" />
-    <ClCompile Include="DirectXTK\Src\VertexTypes.cpp" />
     <ClCompile Include="DirectXTK\Src\WICTextureLoader.cpp" />
     <ClCompile Include="Sample.cpp" />
     <ClCompile Include="stdafx.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DirectX.h" />
-    <ClInclude Include="DirectXTK\Src\AlignedNew.h" />
-    <ClInclude Include="DirectXTK\Src\Bezier.h" />
-    <ClInclude Include="DirectXTK\Src\BinaryReader.h" />
-    <ClInclude Include="DirectXTK\Src\ConstantBuffer.h" />
-    <ClInclude Include="DirectXTK\Src\dds.h" />
-    <ClInclude Include="DirectXTK\Src\DemandCreate.h" />
-    <ClInclude Include="DirectXTK\Src\EffectCommon.h" />
-    <ClInclude Include="DirectXTK\Src\Geometry.h" />
-    <ClInclude Include="DirectXTK\Src\LoaderHelpers.h" />
-    <ClInclude Include="DirectXTK\Src\PlatformHelpers.h" />
-    <ClInclude Include="DirectXTK\Src\SDKMesh.h" />
-    <ClInclude Include="DirectXTK\Src\SharedResourcePool.h" />
-    <ClInclude Include="DirectXTK\Src\vbo.h" />
     <ClInclude Include="Include\DeviceInfo.h" />
     <ClInclude Include="Include\DirectXEnvironment.h" />
     <ClInclude Include="Include\Exception.h" />

@@ -124,7 +124,9 @@ namespace MyGame {
 						}
 					}
 				}
-				
+			
+					
+
 				RECT rect;
 				GetClientRect(hwnd, &rect);
 				ZeroMemory(&SwapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC1));
@@ -532,7 +534,7 @@ namespace MyGame {
 				Direct2DRneder();
 
 				// 把畫好的結果輸出到螢幕上！
-				SwapChain->Present(0, Tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
+				SwapChain->Present(Tearing ? 0 : 1, Tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 			}
 		}
 

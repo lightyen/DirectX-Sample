@@ -24,27 +24,55 @@ namespace MyGame {
 			CLSCTX_INPROC_SERVER,
 			IID_PPV_ARGS(&WICImagingFactory)
 		);
-		CHECKRETURN(hr, TEXT("Create WICImagingFactory"));
+			CHECKRETURN(hr, TEXT("Create WICImagingFactory"));
 
-		// 獲得DXGI介面
-		hr = CreateDXGIFactory(IID_PPV_ARGS(&DXGIFactory));
-		CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
-		ComPtr<IDXGIFactory5> dxgi5;
-		DXGIFactory->QueryInterface(IID_PPV_ARGS(&dxgi5));
-		CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
-		DXGIFactory = dxgi5;
+			// 獲得DXGI介面
+			hr = CreateDXGIFactory(IID_PPV_ARGS(&DXGIFactory));
+			CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
+			ComPtr<IDXGIFactory5> dxgi5;
+			DXGIFactory->QueryInterface(IID_PPV_ARGS(&dxgi5));
+			CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
+			DXGIFactory = dxgi5;
 
-		// 測試看看是否支援關閉垂直同步
-		dxgi5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &TearingSupport, sizeof(TearingSupport));
-
-		// 選擇繪圖介面卡
-		ComPtr<IDXGIAdapter> adapter = FindAdapter();
-		if (adapter == nullptr) {
-			CHECKRETURN(E_FAIL, TEXT("FindAdapter"));
-		}
+			// 測試看看是否支援關閉垂直同步
+			dxgi5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &TearingSupport, sizeof(TearingSupport));
 			
-		CreateDevice(adapter);
-	}
+			// 選擇繪圖介面卡
+			ComPtr<IDXGIAdapter> adapter = FindAdapter();
+			if (adapter == nullptr) {
+				CHECKRETURN(E_FAIL, TEXT("FindAdapter"));
+			}
+			
+			CreateDevice(adapter);
+		}
+
+		public:
+		void Initialize(HWND hWnd) {
+			
+			if (!CreateSwapChain(hWnd)) return;
+
+			HRESULT hr;
+			CreateRenderTargetView();
+			CreateDepthStencilView();
+			PreparePipeline();
+
+			const int deferredCount = 2;
+
+			for (int i = 0; i < deferredCount; i++) {
+				hr = D3D11Device->CreateDeferredContext(0, &DeferredContext[i]);
+				CHECKRETURN(hr, TEXT("CreateDeferredContext"));
+			}
+
+			for (int i = 0; i < deferredCount; i++) {
+				LoadShader(DeferredContext[i].Get());
+				SetupPipeline(i);
+				SetViewport(DeferredContext[i].Get());
+			}
+
+			PrepareDirect2D();
+			QueryPerformanceCounter(&time);
+			QueryPerformanceFrequency(&freq);
+		}
 
 		public:
 		~DirectXPanel() {
@@ -98,11 +126,16 @@ namespace MyGame {
 					hr = D3D11Device->CheckMultisampleQualityLevels(DXGI_FORMAT_B8G8R8A8_UNORM, i, &MsaaQuality);
 					MsaaQualities.push_back(MsaaQuality);
 				}
+
+				// 檢查驅動程式有無支援 MultiThreading
+				// https://msdn.microsoft.com/zh-tw/library/windows/desktop/ff476893(v=vs.85).aspx
+				hr = D3D11Device->CheckFeatureSupport(D3D11_FEATURE_THREADING, &ThreadingSupport, sizeof(D3D11_FEATURE_DATA_THREADING));
+				CHECKRETURN(hr, TEXT("CheckFeatureSupport Multithreading"));
 			}
 		}
 
-		public:
-		void CreateSwapChain(HWND hwnd) {
+		private:
+		BOOL CreateSwapChain(HWND hwnd) {
 			if (DXGIFactory.Get()) {
 				HRESULT hr;
 				ComPtr<IDXGIFactory2> fac2;
@@ -136,7 +169,7 @@ namespace MyGame {
 				SwapChainDesc.SampleDesc.Count = 1;
 				SwapChainDesc.SampleDesc.Quality = 0;
 
-				SwapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+				SwapChainDesc.Scaling = DXGI_SCALING_NONE;
 				SwapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
 				SwapChainDesc.Width = rect.right - rect.left;
 				SwapChainDesc.Height = rect.bottom - rect.top;
@@ -145,39 +178,18 @@ namespace MyGame {
 				hWnd = hwnd;
 
 				hr = fac2->CreateSwapChainForHwnd(D3D11Device.Get(), hWnd, &SwapChainDesc, nullptr, nullptr, SwapChain.ReleaseAndGetAddressOf());
-				CHECKRETURN(hr, TEXT("Create SwapChain1"));
+				if (CheckFailed(hr, TEXT("Create SwapChain1"))) return FALSE;
 
 				CreateD2DDeviceContextFromSwapChain(SwapChain);
 
 				if (!Tearing) {
 					CheckMenuItem(GetMenu(hWnd), IDM_TEARING, MF_CHECKED);
 				}
-			}
-		}
 
-		public:
-		void Initialize() {
-			HRESULT hr;
-			CreateRenderTargetView();
-			CreateDepthStencilView();
-			PreparePipeline();
-
-			const int deferredCount = 2;
-
-			for (int i = 0; i < deferredCount; i++) {
-				hr = D3D11Device->CreateDeferredContext(0, &DeferredContext[i]);
-				CHECKRETURN(hr, TEXT("CreateDeferredContext"));
+				return TRUE;
 			}
 
-			for (int i = 0; i < deferredCount; i++) {
-				LoadShader(DeferredContext[i].Get());
-				SetupPipeline(DeferredContext[i].Get());
-				SetViewport(DeferredContext[i].Get());
-			}
-
-			PrepareDirect2D();
-			QueryPerformanceCounter(&time);
-			QueryPerformanceFrequency(&freq);
+			return FALSE;
 		}
 
 		private:
@@ -343,7 +355,7 @@ namespace MyGame {
 
 		private:
 		void PreparePipeline() {
-
+			
 			HRESULT hr;
 			RECT rect;
 			GetClientRect(hWnd, &rect);
@@ -398,16 +410,16 @@ namespace MyGame {
 		}
 
 		private:
-		void SetupPipeline(ID3D11DeviceContext* deferredContext) {
+		void SetupPipeline(int index) {
 			UINT stride = sizeof(SimpleVertex);
 			UINT offset = 0;
-			deferredContext->IASetVertexBuffers(0, 1, VertexBuffer.GetAddressOf(), &stride, &offset);
-			deferredContext->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-			deferredContext->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
+			DeferredContext[index]->IASetVertexBuffers(0, 1, VertexBuffer.GetAddressOf(), &stride, &offset);
+			DeferredContext[index]->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+			DeferredContext[index]->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
 
 			// 設定初始狀態
 			world = XMMatrixIdentity();
-			eye = XMFLOAT3(0.05f, 0.0f, -5.0f);
+			eye = XMFLOAT3(0.05f, 0.3f, -8.0f);
 			focus = XMFLOAT3(0.0f, 0.0f, 15.5f);
 			up = XMFLOAT3(0.0f, 1.0f, 0.0f);
 			view = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&focus), XMLoadFloat3(&up));
@@ -420,14 +432,14 @@ namespace MyGame {
 
 			// 設置變換矩陣給著色器
 			XMMATRIX transform = world * view * projection;
-			deferredContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
+			DeferredContext[index]->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
 
 			// 設定多邊形拓樸類型
-			deferredContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			DeferredContext[index]->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			// 把RenderTargetView綁定到Output-Merger Stage
 			// 注意這裡是GetAddressOf,而不是ReleaseAndGetAddressOf
-			deferredContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), DepthStencilView.Get());
+			DeferredContext[index]->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), DepthStencilView.Get());
 		}
 
 		private:
@@ -516,24 +528,32 @@ namespace MyGame {
 		}
 
 		private:
-		void Update(int contextIndex) {
-				XMMATRIX transform;
-				transform = world * view * projection;
-				DeferredContext[contextIndex]->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
+		void UpdateDeferred(int index) {
+			XMMATRIX transform;
+			if (index == 0) {
+				auto t = XMMatrixTranslation(0, 0, 5);
+				transform = world * t * view * projection;
 			}
+			else {
+				transform = world * view * projection;
+			}
+				
+			auto context = DeferredContext[index];
+			auto constbuf = ConstantBuffer;
+			context->UpdateSubresource(constbuf.Get(), 0, NULL, &transform, 0, 0);
+		}
 
 		private:
-		void Render(int contextIndex) {
+		void RenderDeferred(int index) {
+			HRESULT hr;
+			auto context = DeferredContext[index];
+			context->DrawIndexed(6, 0, 0);
 
-			if (contextIndex == 0) {
-				DeferredContext[0]->ClearDepthStencilView(DepthStencilView.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
-				DeferredContext[0]->ClearRenderTargetView(RenderTargetView.Get(), Colors::CadetBlue);
-			}
-
-			DeferredContext[contextIndex]->DrawIndexed(6, 0, 0);
-
-			DeferredContext[contextIndex]->FinishCommandList(FALSE, &DeferredCommandList[contextIndex]);
-			
+			// TRUE	: 重存之前設定的狀態
+			// FALSE: 不重存之前的狀態, 則下次使用時須重新設定Shader, Buffer, Viewport ...
+			BOOL restoreState = TRUE;
+			hr = context->FinishCommandList(restoreState, &DeferredCommandList[index]);
+			CHECKRETURN(hr, TEXT("Deferred FinishCommandList"));
 		}
 
 		private:
@@ -552,20 +572,50 @@ namespace MyGame {
 			fpsCounter++;
 		}
 
+		typedef struct _TEST {
+			DirectXPanel* panel;
+			int deferredIndex;
+		} TEST, *PTEST;
+
 		private:
-		void RenderDeferred() {
+		static DWORD NTAPI myWork(
+			_Inout_opt_ PVOID                 Context
+		) {
+			PTEST test = (PTEST)Context;
+			if (test) {
+				test->panel->UpdateDeferred(test->deferredIndex);
+				test->panel->RenderDeferred(test->deferredIndex);
+			}
+			return 0;
+		}
+
+		private:
+		void Render() {
 			
 			ImmediateContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
-			ImmediateContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::Black);
+			ImmediateContext->ClearDepthStencilView(DepthStencilView.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+			FLOAT color[4] = { 47 / 255.0f, 51 / 255.0f, 61 / 255.0f, 255 / 255.0f };
+			ImmediateContext->ClearRenderTargetView(RenderTargetView.Get(), color);
+			
+			if (ThreadingSupport.DriverCommandLists) {
+				/// create threads
+				HANDLE Threads[2];
+				for (int i = 0; i < 2; i++) {
+					TEST t;
+					t.panel = this;
+					t.deferredIndex = i;
+					Threads[i] = CreateThread(NULL, 0, myWork, &t, 0, NULL);
+					break;
+				}
 
-			// create threads
+				DWORD result = WaitForMultipleObjects(2, Threads, TRUE, INFINITE);
 
-			// exec command list
-
-			// update render
-
-			Update(0);
-			Render(0);
+			} else {
+				for (int i = 0; i < 2; i++) {
+					UpdateDeferred(i);
+					RenderDeferred(i);
+				}
+			}
 
 			for (int i = 0; i < 2; i++) {
 				if (DeferredCommandList[i].Get()) {
@@ -600,7 +650,7 @@ namespace MyGame {
 			DirectXPanel* _this = (DirectXPanel*)pParam;
 			while (_this->Running) {
 				_this->HandleUserControl();
-				_this->RenderDeferred();
+				_this->Render();
 			}
 			return 0;
 		}
@@ -754,6 +804,7 @@ namespace MyGame {
 
 		private: 
 		void Clear() {
+
 			TextBrush.Reset();
 			InfoTextFormat.Reset();
 			FPSFormat.Reset();
@@ -803,6 +854,7 @@ namespace MyGame {
 		ComPtr<ID3D11SamplerState> SamplerState;
 
 		BOOL TearingSupport = false;
+		D3D11_FEATURE_DATA_THREADING ThreadingSupport;
 		bool Running = false;
 		bool Tearing = false;
 
