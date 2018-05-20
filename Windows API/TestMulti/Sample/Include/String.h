@@ -195,42 +195,6 @@ namespace {
 #endif
 	}
 
-	template <typename Target>
-	void Append(Target& target, LPCTSTR value, const size_t& size)
-	{
-
-		target.append(value, size);
-	}
-
-	template <typename ... Arguments>
-	void AppendFormat(String& target, LPCTSTR format, Arguments& ... args)
-	{
-
-		TCHAR buffer[BUFFER_MAX_CCH];
-		StringCchPrintf(buffer, BUFFER_MAX_CCH, format, args ...);
-		size_t len;
-		if (SUCCEEDED(StringCchLength(buffer, BUFFER_MAX_CCH, &len)))
-		{
-			len += target.Length();
-		}
-		else return;
-
-		target.resize(len);
-		StringCchPrintf((LPTSTR)target + target.length(), BUFFER_MAX_CCH, format, args ...);
-	}
-
-	template <typename Target, typename ... Arguments>
-	void AppendFormat(Target& target, LPCTSTR format, Arguments& ... args)
-	{
-		target(format, args ...);
-	}
-
-	template <typename Target, unsigned Count>
-	void WriteArgument(Target& target, TCHAR const (&value)[Count])
-	{
-		AppendFormat(target, TEXT("%.*s"), value);
-	}
-
 	void OutputDebug()
 	{
 		OutputDebugString(TEXT("Hello world!\n"));

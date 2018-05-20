@@ -1,9 +1,8 @@
 #pragma once
+
 #include "DeviceInfo.h"
 #include "SimpleVertex.h"
 #include "Shader.h"
-#include "Registry.h"
-#include "Exception.h"
 
 #define CHECKRETURN(a,b) if(CheckFailed(a,b)){return;}
 
@@ -87,7 +86,7 @@ namespace MyGame {
 
 				HRESULT hr = E_FAIL;
 
-				D3D_FEATURE_LEVEL featureLevels[] =
+				D3D_FEATURE_LEVEL featureLevels[2] =
 				{
 					D3D_FEATURE_LEVEL_11_1,
 					D3D_FEATURE_LEVEL_11_0,
@@ -97,13 +96,13 @@ namespace MyGame {
 
 				hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
 					flags,
-					featureLevels, ARRAYSIZE(featureLevels),
+					featureLevels, sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL),
 					D3D11_SDK_VERSION,
 					&D3D11Device, &FeatureLevel, &ImmediateContext);
 
 				if (hr == E_INVALIDARG) {
 					// DirectX 11.0 認不得 D3D_FEATURE_LEVEL_11_1 所以需要排除他,然後再試一次
-					hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, &featureLevels[1], ARRAYSIZE(featureLevels) - 1,
+					hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, &featureLevels[1], sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL) - 1,
 						D3D11_SDK_VERSION, &D3D11Device, &FeatureLevel, &ImmediateContext);
 					CHECKRETURN(hr, TEXT("D3D11CreateDevice"));
 				} else if (hr == E_FAIL) {
@@ -319,7 +318,7 @@ namespace MyGame {
 				};
 
 				// Create the input layout
-				hr = D3D11Device->CreateInputLayout(layout, ARRAYSIZE(layout), vertexShaderCode.Code,
+				hr = D3D11Device->CreateInputLayout(layout, sizeof(layout) / sizeof(D3D11_INPUT_ELEMENT_DESC), vertexShaderCode.Code,
 					vertexShaderCode.Length, VertexLayout.ReleaseAndGetAddressOf());
 				CHECKRETURN(hr, TEXT("Create VertexLayout"));
 
@@ -375,7 +374,7 @@ namespace MyGame {
 			D3D11_BUFFER_DESC bd;
 			ZeroMemory(&bd, sizeof(bd));
 			bd.Usage = D3D11_USAGE_DEFAULT;
-			bd.ByteWidth = sizeof(SimpleVertex) * ARRAYSIZE(vertices);
+			bd.ByteWidth = sizeof(vertices);
 			bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 			bd.CPUAccessFlags = 0;
 			D3D11_SUBRESOURCE_DATA srd;
