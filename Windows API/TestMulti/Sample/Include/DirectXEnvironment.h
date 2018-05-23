@@ -4,6 +4,11 @@
 #include "SimpleVertex.h"
 #include "Shader.h"
 
+#include <wbemidl.h>
+#include <comutil.h>
+#pragma comment(lib, "wbemuuid.lib")
+#pragma comment(lib, "comsuppw.lib")
+
 #define CHECKRETURN(a,b) if(CheckFailed(a,b)){return;}
 
 namespace MyGame {
@@ -12,20 +17,18 @@ namespace MyGame {
 
 		public:
 		DirectXPanel() {
-		HRESULT hr;
-		// ¶b¶πΩuµ{™Ï©l§∆ COM ≤’•ÛΩ’•Œº“¶°°A®√•B≥]©w¶P®B/´D¶P®B√˛´¨
-		hr = CoInitializeEx(nullptr, COINITBASE_MULTITHREADED);
-		CHECKRETURN(hr, TEXT("CoInitialize"));
-		
-		hr = CoCreateInstance(
-			CLSID_WICImagingFactory,
-			NULL,
-			CLSCTX_INPROC_SERVER,
-			IID_PPV_ARGS(&WICImagingFactory)
-		);
-			CHECKRETURN(hr, TEXT("Create WICImagingFactory"));
 
-			// ¿Ú±oDXGI§∂≠±
+			HRESULT hr;
+			// Âú®Ê≠§Á∑öÁ®ãÂàùÂßãÂåñ COM ÁµÑ‰ª∂Ë™øÁî®Ê®°ÂºèÔºå‰∏¶‰∏îË®≠ÂÆöÂêåÊ≠•/ÈùûÂêåÊ≠•È°ûÂûã
+			hr = CoInitializeEx(nullptr, COINITBASE_MULTITHREADED);
+			CHECKRETURN(hr, TEXT("CoInitialize"));
+
+			Info = make_unique<DeviceInfo>();
+
+			// Áç≤ÂæóÁ≥ªÁµ±Ë≥áË®ä
+			GetWMIData();
+
+			// Áç≤ÂæóDXGI‰ªãÈù¢
 			hr = CreateDXGIFactory(IID_PPV_ARGS(&DXGIFactory));
 			CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
 			ComPtr<IDXGIFactory5> dxgi5;
@@ -33,19 +36,34 @@ namespace MyGame {
 			CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
 			DXGIFactory = dxgi5;
 
-			// ¥˙∏’¨›¨›¨Oß_§‰¥©√ˆ≥¨´´™Ω¶P®B
+			// Ê∏¨Ë©¶ÁúãÁúãÊòØÂê¶ÊîØÊè¥ÈóúÈñâÂûÇÁõ¥ÂêåÊ≠•
 			dxgi5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &TearingSupport, sizeof(TearingSupport));
 			
-			// øÔæ‹√∏πœ§∂≠±•d
+			// ÈÅ∏ÊìáÁπ™Âúñ‰ªãÈù¢Âç°
 			ComPtr<IDXGIAdapter> adapter = FindAdapter();
 			if (adapter == nullptr) {
 				CHECKRETURN(E_FAIL, TEXT("FindAdapter"));
 			}
 			
 			CreateDevice(adapter);
+
+			hr = CoCreateInstance(
+				CLSID_WICImagingFactory,
+				NULL,
+				CLSCTX_INPROC_SERVER,
+				IID_PPV_ARGS(&WICImagingFactory)
+			);
+			CHECKRETURN(hr, TEXT("Create WICImagingFactory"));
 		}
 
-		public:
+	public:
+		~DirectXPanel() {
+			Clear();
+			// Closes the COM library on the current thread
+			CoUninitialize();
+		}
+
+		private:
 		void Initialize(HWND hWnd) {
 			
 			if (!CreateSwapChain(hWnd)) return;
@@ -60,24 +78,20 @@ namespace MyGame {
 			for (int i = 0; i < deferredCount; i++) {
 				hr = D3D11Device->CreateDeferredContext(0, &DeferredContext[i]);
 				CHECKRETURN(hr, TEXT("CreateDeferredContext"));
+				//CommonStates states = CommonStates(D3D11Device.Get());
+				//auto cull = states.CullClockwise();
+				//DeferredContext[i]->RSSetState(cull);
 			}
 
 			for (int i = 0; i < deferredCount; i++) {
 				LoadShader(DeferredContext[i].Get());
-				SetupPipeline(i);
+				SetupPipeline(DeferredContext[i].Get());
 				SetViewport(DeferredContext[i].Get());
 			}
 
 			PrepareDirect2D();
 			QueryPerformanceCounter(&time);
 			QueryPerformanceFrequency(&freq);
-		}
-
-		public:
-		~DirectXPanel() {
-			Clear();
-			// Closes the COM library on the current thread
-			CoUninitialize();
 		}
 
 		private:
@@ -94,26 +108,22 @@ namespace MyGame {
 
 				D3D11_CREATE_DEVICE_FLAG flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
-				hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-					flags,
-					featureLevels, sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL),
-					D3D11_SDK_VERSION,
-					&D3D11Device, &FeatureLevel, &ImmediateContext);
+				hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, featureLevels, sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL),
+					D3D11_SDK_VERSION, &D3D11Device, &FeatureLevel, &ImmediateContext);
 
 				if (hr == E_INVALIDARG) {
-					// DirectX 11.0 ª{§£±o D3D_FEATURE_LEVEL_11_1 ©“•Hª›≠n±∆∞£•L,µM´·¶A∏’§@¶∏
+					// DirectX 11.0 Ë™ç‰∏çÂæó D3D_FEATURE_LEVEL_11_1 ÊâÄ‰ª•ÈúÄË¶ÅÊéíÈô§‰ªñ,ÁÑ∂ÂæåÂÜçË©¶‰∏ÄÊ¨°
 					hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, &featureLevels[1], sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL) - 1,
 						D3D11_SDK_VERSION, &D3D11Device, &FeatureLevel, &ImmediateContext);
-					CHECKRETURN(hr, TEXT("D3D11CreateDevice"));
-				} else if (hr == E_FAIL) {
-					CHECKRETURN(E_FAIL, TEXT("D3D11CreateDevice"));
 				}
+
+				CHECKRETURN(hr, TEXT("D3D11CreateDevice"));
 
 				DXGI_ADAPTER_DESC desc;
 				ZeroMemory(&desc, sizeof(DXGI_ADAPTER_DESC));
 				hr = DXGIAdapter->GetDesc(&desc);
 				CHECKRETURN(hr, TEXT("Adapter GetDesc"));
-				Info = make_unique<DeviceInfo>();
+				
 				Info->FeatureLevel = FeatureLevel;
 				Info->VendorId = desc.VendorId;
 				Info->DeviceId = desc.DeviceId;
@@ -126,7 +136,7 @@ namespace MyGame {
 					MsaaQualities.push_back(MsaaQuality);
 				}
 
-				// ¿À¨d≈X∞ µ{¶°¶≥µL§‰¥© MultiThreading
+				// Ê™¢Êü•È©ÖÂãïÁ®ãÂºèÊúâÁÑ°ÊîØÊè¥ MultiThreading
 				// https://msdn.microsoft.com/zh-tw/library/windows/desktop/ff476893(v=vs.85).aspx
 				hr = D3D11Device->CheckFeatureSupport(D3D11_FEATURE_THREADING, &ThreadingSupport, sizeof(D3D11_FEATURE_DATA_THREADING));
 				CHECKRETURN(hr, TEXT("CheckFeatureSupport Multithreading"));
@@ -140,7 +150,7 @@ namespace MyGame {
 				ComPtr<IDXGIFactory2> fac2;
 				hr = DXGIFactory.As(&fac2);
 				if (fac2.Get()) {
-					// DirectX 11.1 •H§W™©•ª
+					// DirectX 11.1 ‰ª•‰∏äÁâàÊú¨
 					ComPtr<ID3D11Device1> dev1;
 					hr = D3D11Device.As(&dev1);
 					if (SUCCEEDED(hr)) {
@@ -168,7 +178,7 @@ namespace MyGame {
 				SwapChainDesc.SampleDesc.Count = 1;
 				SwapChainDesc.SampleDesc.Quality = 0;
 
-				SwapChainDesc.Scaling = DXGI_SCALING_NONE;
+				SwapChainDesc.Scaling = DXGI_SCALING_STRETCH;
 				SwapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
 				SwapChainDesc.Width = rect.right - rect.left;
 				SwapChainDesc.Height = rect.bottom - rect.top;
@@ -219,9 +229,9 @@ namespace MyGame {
 				CHECKRETURN(hr, TEXT("Create D2D1Device"));
 				
 				D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1();
-				// ≥]©w•i•H≥Q DeviceContext ®œ•Œ, ¶˝§£Ø‡Æ≥®”∑Ì¶® input
+				// Ë®≠ÂÆöÂèØ‰ª•Ë¢´ DeviceContext ‰ΩøÁî®, ‰ΩÜ‰∏çËÉΩÊãø‰æÜÁï∂Êàê input
 				bitmapProperties.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
-				// Unknown ™Ì•‹¶€∞ øÔæ‹ªP backbuffer §@ºÀ™∫ÆÊ¶°
+				// Unknown Ë°®Á§∫Ëá™ÂãïÈÅ∏ÊìáËàá backbuffer ‰∏ÄÊ®£ÁöÑÊ†ºÂºè
 				bitmapProperties.pixelFormat = D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED);
 				D2DDeviceContext->GetDpi(&bitmapProperties.dpiX, &bitmapProperties.dpiY);
 
@@ -290,14 +300,9 @@ namespace MyGame {
 			if (context) {
 				RECT rect;
 				GetClientRect(hWnd, &rect);
-				D3D11_VIEWPORT vp;
-				vp.TopLeftX = 0;
-				vp.TopLeftY = 0;
-				vp.Width = ceilf((float)rect.right - (float)rect.left);
-				vp.Height = ceilf((float)rect.bottom - (float)rect.top);
-				vp.MinDepth = 0.0f;
-				vp.MaxDepth = 1.0f;
-				context->RSSetViewports(1, &vp);
+				Viewport vp(0, 0, ceilf((float)rect.right - (float)rect.left), ceilf((float)rect.bottom - (float)rect.top));
+				// Ë®≠ÂÆöRenderÂ•ΩÁöÑÂ†¥ÊôØË¶ÅÁï´Âú®backbufferÁöÑÂì™ÂÄãÂçÄÂüü(ÈÄöÂ∏∏ÊòØÂÖ®ÈÉ®ÁöÑbackbufferÂçÄÂüü)
+				context->RSSetViewports(1, vp.Get11());
 			}
 		}
 
@@ -322,7 +327,7 @@ namespace MyGame {
 					vertexShaderCode.Length, VertexLayout.ReleaseAndGetAddressOf());
 				CHECKRETURN(hr, TEXT("Create VertexLayout"));
 
-				// Set the input layout
+				// Set the input layout to the input-assembler
 				context->IASetInputLayout(VertexLayout.Get());
 
 				// Load Shader bytecode
@@ -353,6 +358,40 @@ namespace MyGame {
 		}
 
 		private:
+			void SetupPipeline(ID3D11DeviceContext* context) {
+				UINT stride = sizeof(SimpleVertex);
+				UINT offset = 0;
+				context->IASetVertexBuffers(0, 1, VertexBuffer.GetAddressOf(), &stride, &offset);
+				context->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+				context->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
+
+				// Ë®≠ÂÆöÂàùÂßãÁãÄÊÖã
+				//Matrix::CreateLookAt()
+				world = XMMatrixIdentity();
+				eye = Vector3(0.0f, 0.0f, 1500.0f);
+				focus_target = Vector3(0.0f, 0.0f, 0.0f);
+				up = Vector3(0.0f, 1.0f, 0.0f);
+				view = XMMatrixLookAtRH(eye, focus_target, up);
+				RECT rect;
+				GetClientRect(hWnd, &rect);
+				float width = ceilf(((float)rect.right - (float)rect.left) / 100.0f);
+				float height = ceilf(((float)rect.bottom - (float)rect.top) / 100.0f);
+				
+				projection = XMMatrixPerspectiveRH(width, height, nearZ, farZ);
+
+				// Ë®≠ÁΩÆËÆäÊèõÁü©Èô£Áµ¶ËëóËâ≤Âô®
+				XMMATRIX transform = world * view * projection;
+				context->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
+
+				// Ë®≠ÂÆöÂ§öÈÇäÂΩ¢ÊãìÊ®∏È°ûÂûã
+				context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				// ÊääDepthStencilViewÁ∂ÅÂÆöÂà∞Output-Merger
+				context->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), DepthStencilView.Get());
+			}
+
+
+		private:
 		void PreparePipeline() {
 			
 			HRESULT hr;
@@ -361,16 +400,16 @@ namespace MyGame {
 			float w = (float)rect.right - (float)rect.left;
 			float h = (float)rect.bottom - (float)rect.top;
 
-			// º“´¨∏ÍÆ∆
+			// Ê®°ÂûãË≥áÊñô
 			SimpleVertex vertices[] =
 			{
-				XMFLOAT4(-w / 2.0f, h / 2.0f, 10.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
-				XMFLOAT4(w / 2.0f, h / 2.0f, 10.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
-				XMFLOAT4(-w / 2.0f, -h / 2.0f, 10.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
-				XMFLOAT4(w / 2.0f, -h / 2.0f, 10.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
+				XMFLOAT4(-w / 2.0f, h / 2.0f, -10.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
+				XMFLOAT4(w / 2.0f, h / 2.0f, -10.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
+				XMFLOAT4(-w / 2.0f, -h / 2.0f, -10.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
+				XMFLOAT4(w / 2.0f, -h / 2.0f, -10.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
 			};
 
-			// ´ÿ•ﬂº“´¨≥ª¬IΩwΩƒ∞œ
+			// Âª∫Á´ãÊ®°ÂûãÈ†ÇÈªûÁ∑©Ë°ùÂçÄ
 			D3D11_BUFFER_DESC bd;
 			ZeroMemory(&bd, sizeof(bd));
 			bd.Usage = D3D11_USAGE_DEFAULT;
@@ -383,7 +422,7 @@ namespace MyGame {
 			hr = D3D11Device->CreateBuffer(&bd, &srd, &VertexBuffer);
 			CHECKRETURN(hr, TEXT("Create VertexBuffer"));
 
-			// ´ÿ•ﬂº“´¨≥ª¬IØ¡§ﬁΩwΩƒ∞œ
+			// Âª∫Á´ãÊ®°ÂûãÈ†ÇÈªûÁ¥¢ÂºïÁ∑©Ë°ùÂçÄ
 			UINT indices[] = { 0, 1, 2, 1, 3, 2 };
 			D3D11_BUFFER_DESC indexDesc;
 			ZeroMemory(&indexDesc, sizeof(indexDesc));
@@ -397,7 +436,7 @@ namespace MyGame {
 			hr = D3D11Device->CreateBuffer(&indexDesc, &indexsrd, &IndexBuffer);
 			CHECKRETURN(hr, TEXT("Create IndexBuffer"));
 
-			// ´ÿ•ﬂ±`∂qΩwΩƒ∞œ
+			// Âª∫Á´ãÂ∏∏ÈáèÁ∑©Ë°ùÂçÄ
 			D3D11_BUFFER_DESC constDesc;
 			ZeroMemory(&constDesc, sizeof(constDesc));
 			constDesc.ByteWidth = sizeof(XMMATRIX);
@@ -405,40 +444,7 @@ namespace MyGame {
 			constDesc.Usage = D3D11_USAGE_DEFAULT;
 			constDesc.CPUAccessFlags = 0;
 			hr = D3D11Device->CreateBuffer(&constDesc, NULL, &ConstantBuffer);
-			CHECKRETURN(hr, TEXT("Create ConstBuffer"));	
-		}
-
-		private:
-		void SetupPipeline(int index) {
-			UINT stride = sizeof(SimpleVertex);
-			UINT offset = 0;
-			DeferredContext[index]->IASetVertexBuffers(0, 1, VertexBuffer.GetAddressOf(), &stride, &offset);
-			DeferredContext[index]->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-			DeferredContext[index]->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
-
-			// ≥]©w™Ï©l™¨∫A
-			world = XMMatrixIdentity();
-			eye = XMFLOAT3(0.05f, 0.3f, -8.0f);
-			focus = XMFLOAT3(0.0f, 0.0f, 15.5f);
-			up = XMFLOAT3(0.0f, 1.0f, 0.0f);
-			view = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&focus), XMLoadFloat3(&up));
-			RECT rect;
-			GetClientRect(hWnd, &rect);
-			float width = ceilf(((float)rect.right - (float)rect.left) / 2.0f);
-			float height = ceilf(((float)rect.bottom - (float)rect.top) / 2.0f);
-			float nearZ = 5.0f, farZ = 100.0f;
-			projection = XMMatrixPerspectiveLH(width, height, nearZ, farZ);
-
-			// ≥]∏m≈‹¥´Øx∞}µπµ€¶‚æπ
-			XMMATRIX transform = world * view * projection;
-			DeferredContext[index]->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
-
-			// ≥]©w¶h√‰ßŒ©›æÎ√˛´¨
-			DeferredContext[index]->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-			// ß‚RenderTargetView∏j©w®ÏOutput-Merger Stage
-			// ™`∑N≥o∏Ã¨OGetAddressOf,¶”§£¨OReleaseAndGetAddressOf
-			DeferredContext[index]->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), DepthStencilView.Get());
+			CHECKRETURN(hr, TEXT("Create ConstBuffer"));
 		}
 
 		private:
@@ -451,9 +457,9 @@ namespace MyGame {
 				hr = SwapChain->GetDesc1(&SwapChainDesc);
 				CHECKRETURN(hr, TEXT("SwapChain GetDesc1"));
 
-				hr = DWriteFactory->CreateTextFormat(TEXT("∑L≥n•ø∂¬≈È"), nullptr, DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 22.0f, TEXT("zh-TW"), InfoTextFormat.ReleaseAndGetAddressOf());
+				hr = DWriteFactory->CreateTextFormat(TEXT("ÂæÆËªüÊ≠£ÈªëÈ´î"), nullptr, DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 22.0f, TEXT("zh-TW"), InfoTextFormat.ReleaseAndGetAddressOf());
 				CheckFailed(hr, TEXT("Create Info TextFormat"));
-				hr = DWriteFactory->CreateTextFormat(TEXT("∑L≥n•ø∂¬≈È"), nullptr, DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 24.0f, TEXT("zh-TW"), FPSFormat.ReleaseAndGetAddressOf());
+				hr = DWriteFactory->CreateTextFormat(TEXT("ÂæÆËªüÊ≠£ÈªëÈ´î"), nullptr, DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 24.0f, TEXT("zh-TW"), FPSFormat.ReleaseAndGetAddressOf());
 				CheckFailed(hr, TEXT("Create FPS TextFormat"));
 				hr = D2DDeviceContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Crimson), TextBrush.GetAddressOf());
 				CheckFailed(hr, TEXT("Create Text Brush"));
@@ -487,41 +493,77 @@ namespace MyGame {
 				float offsetX = 0.0f, offsetY = 0.0f;
 
 				switch (msg.message) {
-				case WM_KEYDOWN:
-				{
-					switch (LOBYTE(msg.wParam))
+					case WM_KEYDOWN:
 					{
-					case 'W':
-						offsetY = 10.0f;
-						break;
-					case 'S':
-						offsetY = -10.0f;
-						break;
-					case 'A':
-						offsetX = -10.0f;
-						break;
-					case 'D':
-						offsetX = 10.0f;
-						break;
-					case VK_PROCESSKEY: // IME key
-						break;
-					default:
-						break;
+						switch (LOBYTE(msg.wParam))
+						{
+						case 'W':
+							offsetY = 10.0f;
+							break;
+						case 'S':
+							offsetY = -10.0f;
+							break;
+						case 'A':
+							offsetX = -10.0f;
+							break;
+						case 'D':
+							offsetX = 10.0f;
+							break;
+						case VK_PROCESSKEY: // IME key
+							break;
+						default:
+							break;
+						}
+						world = world * XMMatrixTranslation(offsetX, offsetY, 0.0f);
 					}
-					world = world * XMMatrixTranslation(offsetX, offsetY, 0.0f);
-				}
-				break;
-				case WM_CHAR:
-					OutputDebug(TEXT("Char = %c\n"), LODWORD(msg.wParam));
 					break;
-				case WM_MOUSEWHEEL:
-				{
-					auto x = (SHORT)HIWORD(msg.wParam) / 120;
-					eye.z += (float)x;
-					view = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&focus), XMLoadFloat3(&up));
-					OutputDebug(TEXT("Wheel = %d\n"), x);
-				}
+					case WM_CHAR:
+						OutputDebug(TEXT("Char = %c\n"), LODWORD(msg.wParam));
+						break;
+					case WM_MOUSEWHEEL:
+					{
+						auto x = (SHORT)HIWORD(msg.wParam) / 120;
+						auto rotate = XMMatrixRotationRollPitchYaw(0, x * XM_PI / 180.0f, 0);
+					
+						auto v = XMVector3Transform(XMLoadFloat3(&eye), rotate);
+						XMStoreFloat3(&eye, v);
+						view = XMMatrixLookAtRH(XMLoadFloat3(&eye), XMLoadFloat3(&focus_target), XMLoadFloat3(&up));
+						OutputDebug(TEXT("Wheel = %d\n"), x);
+					}
 					break;
+					case WM_LBUTTONDOWN:
+						point = MAKEPOINTS(msg.lParam);
+						break;
+					case WM_MOUSEMOVE:
+						if (msg.wParam & MK_LBUTTON) {
+
+							XMVECTOR _eye = XMLoadFloat3(&eye);
+							XMVECTOR _focus = XMLoadFloat3(&focus_target);
+							XMVECTOR v = _focus - _eye;
+							XMVECTOR _up = XMLoadFloat3(&up);
+
+							XMVECTOR ox = XMVector3Normalize(XMVector3Cross(v, _up));
+							XMVECTOR oy = _up;
+							XMVECTOR o = _eye + nearZ * XMVector3Normalize(v);
+
+							// calc new up
+							_up = XMLoadFloat3(&up);
+							XMVECTOR proje = v * XMVector3Dot(_up, v) / XMVector3Dot(v, v);
+							XMVECTOR new_up = XMVector3Normalize(_up - proje);
+							XMStoreFloat3(&up, new_up);
+
+							POINTS p = MAKEPOINTS(msg.lParam);
+							POINTS offs;
+							offs.x = p.x - point.x;
+							offs.y = p.y - point.y;
+							point = p;
+
+							XMVECTOR new_o = o + -ox * (float)offs.x + oy * (float)offs.y;
+							XMVECTOR new_eye = new_o + nearZ * XMVector3Normalize(new_o - _focus);
+							XMStoreFloat3(&eye, new_eye);
+							view = XMMatrixLookAtRH(XMLoadFloat3(&eye), XMLoadFloat3(&focus_target), XMLoadFloat3(&up));
+						}
+						break;
 				}
 			}
 		}
@@ -529,8 +571,8 @@ namespace MyGame {
 		private:
 		void UpdateDeferred(int index) {
 			XMMATRIX transform;
-			if (index == 0) {
-				auto t = XMMatrixTranslation(0, 0, 5);
+			if (index == 1) {
+				auto t = XMMatrixTranslation(5, 100, 800);
 				transform = world * t * view * projection;
 			}
 			else {
@@ -540,6 +582,11 @@ namespace MyGame {
 			auto context = DeferredContext[index];
 			auto constbuf = ConstantBuffer;
 			context->UpdateSubresource(constbuf.Get(), 0, NULL, &transform, 0, 0);
+
+			if (SamplerState.Get() && ResourceView.Get()) {
+				context->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
+				context->PSSetShaderResources(0, 1, ResourceView.GetAddressOf());
+			}
 		}
 
 		private:
@@ -548,8 +595,8 @@ namespace MyGame {
 			auto context = DeferredContext[index];
 			context->DrawIndexed(6, 0, 0);
 
-			// TRUE	: ≠´¶s§ß´e≥]©w™∫™¨∫A
-			// FALSE: §£≠´¶s§ß´e™∫™¨∫A, ´h§U¶∏®œ•ŒÆ…∂∑≠´∑s≥]©wShader, Buffer, Viewport ...
+			// TRUE	: ÈáçÂ≠ò‰πãÂâçË®≠ÂÆöÁöÑÁãÄÊÖã
+			// FALSE: ‰∏çÈáçÂ≠ò‰πãÂâçÁöÑÁãÄÊÖã, Ââá‰∏ãÊ¨°‰ΩøÁî®ÊôÇÈ†àÈáçÊñ∞Ë®≠ÂÆöShader, Buffer, Viewport ...
 			BOOL restoreState = TRUE;
 			hr = context->FinishCommandList(restoreState, &DeferredCommandList[index]);
 			CHECKRETURN(hr, TEXT("Deferred FinishCommandList"));
@@ -561,7 +608,7 @@ namespace MyGame {
 			QueryPerformanceCounter(&now);
 			__int64 ElapsedCount = (now.QuadPart - time.QuadPart);
 			double Elapsed = ElapsedCount * 1000.0 / freq.QuadPart;
-			const double UpdatePeriod = 200.0;
+			const double UpdatePeriod = 100.0;
 			if (Elapsed > UpdatePeriod) {
 				double fps = 1000.0 * fpsCounter / Elapsed;
 				fpsString.Format(TEXT("%.2lf"), fps);
@@ -626,17 +673,26 @@ namespace MyGame {
 			GetFPS();
 			Direct2DRneder();
 
-			// ß‚µe¶n™∫µ≤™GøÈ•X®Ïø√πı§W°I
+			// ÊääÁï´Â•ΩÁöÑÁµêÊûúËº∏Âá∫Âà∞Ëû¢Âπï‰∏äÔºÅ
 			SwapChain->Present(0, Tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 		}
 
 		public:
-		HANDLE StartGameLoop() {
+		HANDLE StartGameLoop(HWND hWnd) {
 			if (Running == false) {
 				Running = true;
+				Initialize(hWnd);
 				return CreateThread(NULL, 0, GameLoop, this, 0, NULL);
 			}
 			return NULL;
+		}
+
+		private:
+		void Run() {
+			while (Running) {
+				HandleUserControl();
+				Render();
+			}
 		}
 
 		public:
@@ -647,11 +703,13 @@ namespace MyGame {
 		private:
 		static DWORD WINAPI GameLoop(PVOID pParam) {
 			DirectXPanel* _this = (DirectXPanel*)pParam;
-			while (_this->Running) {
-				_this->HandleUserControl();
-				_this->Render();
-			}
+			_this->Run();
 			return 0;
+		}
+
+		private:
+		static DWORD WINAPI CreateDeferredContext(PVOID pParam) {
+
 		}
 
 		private:
@@ -666,9 +724,9 @@ namespace MyGame {
 		}
 
 		void CreateWICTexture(byte* data, size_t size) {
-			ComPtr<ID3D11ShaderResourceView> resourceView;
+			
 			HRESULT hr;
-			hr = CreateWICTextureFromMemory(D3D11Device.Get(), ImmediateContext.Get(), data, size, nullptr, &resourceView);
+			hr = CreateWICTextureFromMemory(D3D11Device.Get(), ImmediateContext.Get(), data, size, nullptr, &ResourceView);
 			CHECKRETURN(hr, TEXT("CreateWICTextureFromMemory"));
 
 			D3D11_SAMPLER_DESC sampDesc;
@@ -682,9 +740,6 @@ namespace MyGame {
 			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
 			hr = D3D11Device->CreateSamplerState(&sampDesc, SamplerState.ReleaseAndGetAddressOf());
 			CHECKRETURN(hr, TEXT("CreateSamplerState"));
-			DeferredContext[0]->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
-			DeferredContext[0]->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
-
 		}
 
 		public:
@@ -716,6 +771,7 @@ namespace MyGame {
 					if (hData) {
 						DWORD nRead;
 						if (ReadFile(hFile, hData, size, &nRead, NULL)) {
+							OutputDebug(TEXT("Create Texture %s\n"), ofn.lpstrFile);
 							CreateTexture((BYTE*)hData, size);
 						}
 						GlobalFree(hData);
@@ -751,10 +807,165 @@ namespace MyGame {
 		}
 
 		public:
+		void Test() {
+			HRESULT hr;
+			ComPtr<ID3D11Texture2D> tex;
+			ComPtr<ID3D11ShaderResourceView> texView;
+			UINT width = 128;
+			UINT height = 128;
+			UINT bpp = 32;
+			UINT rowPitch = (width * bpp + 7) / 8;
+			unique_ptr<uint8_t[]> temp(new (std::nothrow) uint8_t[width * height * 4]);
+
+			for (UINT i = 0; i < height; i++) {
+				for (UINT j = 0; j < width; j++) {
+					uint8_t* p = &temp[(i * width + j) * 4];
+					p[0] = 50;
+					p[1] = 0;
+					p[2] = 0;
+					p[3] = 255;
+				}
+			}
+
+
+			// Create Texutre2D
+			D3D11_TEXTURE2D_DESC desc;
+			desc.Width = width;
+			desc.Height = height;
+			desc.MipLevels = 1;
+			desc.ArraySize = 1;
+			desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			desc.SampleDesc.Count = 1;
+			desc.SampleDesc.Quality = 0;
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			desc.MiscFlags = 0;
+			D3D11_SUBRESOURCE_DATA initData;
+			initData.pSysMem = temp.get();
+			initData.SysMemPitch = static_cast<UINT>(rowPitch);
+			initData.SysMemSlicePitch = static_cast<UINT>(rowPitch * height);
+			hr = D3D11Device->CreateTexture2D(&desc, &initData, &tex);
+			CHECKRETURN(hr, TEXT("CreateTexture2D"));
+
+			D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
+			SRVDesc.Format = desc.Format;
+			SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+			SRVDesc.Texture2D.MipLevels = 1;
+
+			hr = D3D11Device->CreateShaderResourceView(tex.Get(), &SRVDesc, &texView);
+			CHECKRETURN(hr, TEXT("CreateShaderResourceView"));
+
+			D3D11_SAMPLER_DESC sampDesc;
+			ZeroMemory(&sampDesc, sizeof(sampDesc));
+			sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+			sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+			sampDesc.MinLOD = 0;
+			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+			hr = D3D11Device->CreateSamplerState(&sampDesc, SamplerState.ReleaseAndGetAddressOf());
+			CHECKRETURN(hr, TEXT("CreateSamplerState"));
+			DeferredContext[0]->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
+			DeferredContext[0]->PSSetShaderResources(0, 1, texView.GetAddressOf());
+		}
+
+		private:
+		void GetWMIData() {
+			HRESULT hr;
+			hr = CoInitializeSecurity(
+				NULL,                       // security descriptor
+				-1,                          // use this simple setting
+				NULL,                        // use this simple setting
+				NULL,                        // reserved
+				RPC_C_AUTHN_LEVEL_DEFAULT,   // authentication level  
+				RPC_C_IMP_LEVEL_IMPERSONATE, // impersonation level
+				NULL,                        // use this simple setting
+				EOAC_NONE,                   // no special capabilities
+				NULL);                          // reserved
+			CHECKRETURN(hr, TEXT("CoInitializeSecurity"));
+
+			ComPtr<IWbemLocator> Locator;
+			hr = CoCreateInstance(
+				CLSID_WbemLocator,
+				NULL,
+				CLSCTX_INPROC_SERVER,
+				IID_PPV_ARGS(&Locator));
+
+			CHECKRETURN(hr, TEXT("CoCreateInstance IWbemLocator"));
+
+			ComPtr<IWbemServices> Services;
+			hr = Locator->ConnectServer(
+				_bstr_t(L"ROOT\\CIMV2"), // Object path of WMI namespace
+				NULL,                    // User name. NULL = current user
+				NULL,                    // User password. NULL = current
+				0,                       // Locale. NULL indicates current
+				NULL,                    // Security flags.
+				0,                       // Authority (for example, Kerberos)
+				0,                       // Context object 
+				&Services                // pointer to IWbemServices proxy
+			);
+
+			CHECKRETURN(hr, TEXT("Fail to Connect WMI Server"));
+
+			OutputDebug(TEXT("Connected to ROOT\\CIMV2 WMI namespace\n"));
+
+
+			ComPtr<IEnumWbemClassObject> Enumerator;
+			hr = Services->ExecQuery(
+				bstr_t("WQL"),
+				bstr_t("SELECT * FROM Win32_Processor"),
+				WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+				NULL,
+				&Enumerator);
+
+			CHECKRETURN(hr, TEXT("Exec WMI Query"));
+
+
+			
+			ULONG uReturn = 0;
+
+			while (Enumerator.Get())
+			{
+				IWbemClassObject* clsObj;
+				HRESULT hr = Enumerator->Next(WBEM_INFINITE, 1,
+					&clsObj, &uReturn);
+
+				if (0 == uReturn)
+				{
+					break;
+				}
+
+				VARIANT vtProp;
+
+				// Get the value of the Name property
+				hr = clsObj->Get(L"NumberOfCores", 0, &vtProp, 0, 0);
+				if (SUCCEEDED(hr) && vtProp.vt == VT_I4) {
+					Info->NumberOfCores = vtProp.intVal;
+					OutputDebug(TEXT("NumberOfCores : %d\n"), vtProp.intVal);
+				}
+				hr = clsObj->Get(L"NumberOfLogicalProcessors", 0, &vtProp, 0, 0);
+				if (SUCCEEDED(hr) && vtProp.vt == VT_I4) {
+					Info->NumberOfLogicalProcessors = vtProp.intVal;
+					OutputDebug(TEXT("NumberOfLogicalProcessors : %d\n"), vtProp.intVal);
+				}
+
+				VariantClear(&vtProp);
+				clsObj->Release();
+			}
+		}
+
+		public:
 		bool ToggleTearing() {
 			if (TearingSupport) {
 				Tearing = !Tearing;
 			}
+			return Tearing;
+		}
+
+		public:
+		bool GetTearing() {
 			return Tearing;
 		}
 
@@ -763,12 +974,12 @@ namespace MyGame {
 			if (DXGIFactory.Get()) {
 				vector<ComPtr<IDXGIAdapter>> adapters;
 				ComPtr<IDXGIAdapter> pAdapter;
-				// ¶C¡|©“¶≥§∂≠±
+				// ÂàóËàâÊâÄÊúâ‰ªãÈù¢
 				for (UINT i = 0; DXGIFactory->EnumAdapters(i, pAdapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++i) {
 					adapters.push_back(pAdapter);
 				}
 
-				// ¶≥ Nvidia ¥NøÔ, µM´·AMD, Intel±∆≥Ã´·.
+				// Êúâ Nvidia Â∞±ÈÅ∏, ÁÑ∂ÂæåAMD, IntelÊéíÊúÄÂæå.
 
 				DXGI_ADAPTER_DESC desc;
 
@@ -809,7 +1020,6 @@ namespace MyGame {
 			FPSFormat.Reset();
 			DWriteFactory.Reset();
 			SamplerState.Reset();
-			resourceView.Reset();
 			IndexBuffer.Reset();
 			VertexBuffer.Reset();
 			PixelShader.Reset();
@@ -825,7 +1035,7 @@ namespace MyGame {
 
 		private:
 		HWND hWnd;
-		/// √ˆ©ÛComPtr, ´ÿ•ﬂ∑s™∫™F¶Ë¥N•ŒReleaseAndGetAddressOf() µ•¶P©Û '&'; ¶p™G•u¨O∑Q≠n∞—¶“®∫¥N•ŒGetAddressOf()
+		/// ÈóúÊñºComPtr, Âª∫Á´ãÊñ∞ÁöÑÊù±Ë•øÂ∞±Áî®ReleaseAndGetAddressOf() Á≠âÂêåÊñº '&'; Â¶ÇÊûúÂè™ÊòØÊÉ≥Ë¶ÅÂèÉËÄÉÈÇ£Â∞±Áî®GetAddressOf()
 		ComPtr<IDXGIFactory> DXGIFactory;
 		D3D_FEATURE_LEVEL FeatureLevel;
 		ComPtr<ID3D11Device> D3D11Device;
@@ -844,12 +1054,11 @@ namespace MyGame {
 		ComPtr<ID3D11VertexShader> VertexShader;
 		ComPtr<ID3D11PixelShader> PixelShader;
 		ComPtr<ID3D11ShaderReflection> Reflector;
+		ComPtr<ID3D11ShaderResourceView> ResourceView;
 
 		ComPtr<ID3D11Buffer> VertexBuffer;
 		ComPtr<ID3D11Buffer> IndexBuffer;
 		ComPtr<ID3D11Buffer> ConstantBuffer;
-		ComPtr<ID3D11Resource> resource;
-		ComPtr<ID3D11ShaderResourceView> resourceView;
 		ComPtr<ID3D11SamplerState> SamplerState;
 
 		BOOL TearingSupport = false;
@@ -872,8 +1081,11 @@ namespace MyGame {
 		XMMATRIX world = XMMatrixIdentity();
 		XMMATRIX view = XMMatrixIdentity();
 		XMMATRIX projection = XMMatrixIdentity();
-		XMFLOAT3 eye;
-		XMFLOAT3 focus;
-		XMFLOAT3 up;
+		Vector3 eye;
+		Vector3 focus_target;
+		Vector3 up;
+		float nearZ = 5.0f; 
+		float farZ = 10000.0f;
+		POINTS point;
 	};
 }
