@@ -434,14 +434,14 @@ namespace MyGame {
 			// 模型資料
 			SimpleVertex vertices[] =
 			{
-				XMFLOAT4(-w / 6.0f, h / 2.0f, 200.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
-				XMFLOAT4(w / 6.0f, h / 2.0f, 200.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
-				XMFLOAT4(-w / 6.0f, -h / 2.0f, 200.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
-				XMFLOAT4(w / 6.0f, -h / 2.0f, 200.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
-				XMFLOAT4(-w / 5.0f, h / 2.0f, -200.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
-				XMFLOAT4(w / 5.0f, h / 2.0f, -200.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
-				XMFLOAT4(-w / 5.0f, -h / 2.0f, -200.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
-				XMFLOAT4(w / 5.0f, -h / 2.0f, -200.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
+				XMFLOAT4(-w / 5.0f, h / 5.0f, 200.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
+				XMFLOAT4(w / 5.0f, h / 5.0f, 200.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
+				XMFLOAT4(-w / 5.0f, -h / 5.0f, 200.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
+				XMFLOAT4(w / 5.0f, -h / 5.0f, 200.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
+				XMFLOAT4(-w / 8.0f, h / 8.0f, -200.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
+				XMFLOAT4(w / 8.0f, h / 8.0f, -200.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
+				XMFLOAT4(-w / 8.0f, -h / 8.0f, -200.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
+				XMFLOAT4(w / 8.0f, -h / 8.0f, -200.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
 			};
 
 			// 建立模型頂點緩衝區
@@ -564,13 +564,10 @@ namespace MyGame {
 						break;
 					case WM_MOUSEWHEEL:
 					{
-						auto x = (SHORT)HIWORD(msg.wParam) / 120;
-						auto rotate = XMMatrixRotationRollPitchYaw(0, 3 * x * XM_PI / 180.0f, 0);
-					
-						auto v = XMVector3Transform(XMLoadFloat3(&eye), rotate);
-						XMStoreFloat3(&eye, v);
+						int x = (SHORT)HIWORD(msg.wParam) / 120;
+						Matrix scale = Matrix::CreateScale(1.0f - 0.1f * x);
+						eye = Vector3::Transform(eye, scale);
 						view = Matrix::CreateLookAt(eye, focus_target, up);
-						OutputDebug(TEXT("Wheel = %d\n"), x);
 					}
 					break;
 					case WM_LBUTTONDOWN:
@@ -579,34 +576,14 @@ namespace MyGame {
 					case WM_MOUSEMOVE:
 						if (msg.wParam & MK_LBUTTON) {
 
-
-
-							Vector3 v = focus_target - eye;
-							v.Normalize();
-							Vector3 ox = v.Cross(up);
-							ox.Normalize();
-
-							Vector3 oy = up;
-							Vector3 o = eye + nearZ * v;
-
-							// calc new up
-							Vector3 proje = up.Dot(v) * v;
-							Vector3 new_up = up - proje;
-							new_up.Normalize();
-
-							up = new_up;
-
 							POINTS p = MAKEPOINTS(msg.lParam);
 							POINTS offs;
 							offs.x = p.x - point.x;
 							offs.y = p.y - point.y;
 							point = p;
 
-							Vector3 new_o = o + -ox * (float)offs.x + oy * (float)offs.y;
-							Vector3 u = new_o - focus_target;
-							u.Normalize();
-							Vector3 new_eye = new_o + nearZ * u;
-							eye = new_eye;
+							Matrix rotate = Matrix::CreateFromYawPitchRoll(-offs.x * XM_PI / 180.0f / 3.0f, offs.y * XM_PI / 180.0f / 3.0f, 0.0f);
+							eye = Vector3::Transform(eye, rotate);
 							view = Matrix::CreateLookAt(eye, focus_target, up);
 						}
 						break;
