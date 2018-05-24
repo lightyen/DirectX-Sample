@@ -25,6 +25,7 @@
 // For now, we just load the first frame (note: DirectXTex supports multi-frame images)
 
 #include "pch.h"
+
 #include "WICTextureLoader.h"
 
 #include "DirectXHelpers.h"

@@ -9,6 +9,8 @@ public:
 	int DeviceId;
 	SIZE_T DedicatedVideoMemory;
 	String Description;
+	int NumberOfCores;
+	int NumberOfLogicalProcessors;
 
 	String Vender() {
 		switch (VendorId) {
@@ -62,7 +64,7 @@ public:
 				VideoMemory.Format(TEXT("%.0lf GB"), round(size / (1 << 30)));
 			}
 
-			return String(TEXT("%s\n%s\n%s\n%s"), D3DVersion().c_str(), Vender().c_str(), Description.c_str(), VideoMemory.c_str());
+			return String(TEXT("%s\n%s\nCores: %d\nLogicalProcessors: %d\n%s"), D3DVersion().c_str(), Description.c_str(), NumberOfCores, NumberOfLogicalProcessors, VideoMemory.c_str());
 		} else {
 			return String(TEXT("unknown device"));
 		}

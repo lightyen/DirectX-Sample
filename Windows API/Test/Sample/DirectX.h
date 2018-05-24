@@ -30,6 +30,14 @@
 #include <DirectXColors.h>
 #include <DirectXMath.h>
 #include <d3dcompiler.h>
+
+// DirectXTK
+#include "SimpleMath.h"
+using namespace DirectX::SimpleMath;
+#include "WICTextureLoader.h"
+#include "DDSTextureLoader.h"
+#include "CommonStates.h"
+
 #else
 #error 開發環境需要 Windows 10 或者以上版本
 #endif

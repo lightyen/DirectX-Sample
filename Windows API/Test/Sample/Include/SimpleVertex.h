@@ -3,7 +3,7 @@
 namespace MyGame {
 	struct SimpleVertex {
 		XMFLOAT4 Position;
-		XMFLOAT4 Color;
+		XMFLOAT4 Normal;
 		XMFLOAT2 TexCoord;
 	};
 }

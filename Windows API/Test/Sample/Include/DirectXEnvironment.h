@@ -1,9 +1,13 @@
 #pragma once
+
 #include "DeviceInfo.h"
 #include "SimpleVertex.h"
 #include "Shader.h"
-#include "Registry.h"
-#include "Exception.h"
+
+#include <wbemidl.h>
+#include <comutil.h>
+#pragma comment(lib, "wbemuuid.lib")
+#pragma comment(lib, "comsuppw.lib")
 
 #define CHECKRETURN(a,b) if(CheckFailed(a,b)){return;}
 
@@ -13,44 +17,97 @@ namespace MyGame {
 
 		public:
 		DirectXPanel() {
-		HRESULT hr;
-		// 在此線程初始化 COM 組件調用模式，並且設定同步/非同步類型
-		hr = CoInitializeEx(nullptr, COINITBASE_MULTITHREADED);
-		CHECKRETURN(hr, TEXT("CoInitialize"));
-		
-		hr = CoCreateInstance(
-			CLSID_WICImagingFactory,
-			NULL,
-			CLSCTX_INPROC_SERVER,
-			IID_PPV_ARGS(&WICImagingFactory)
-		);
-		CHECKRETURN(hr, TEXT("Create WICImagingFactory"));
 
-		// 獲得DXGI介面
-		hr = CreateDXGIFactory(IID_PPV_ARGS(&DXGIFactory));
-		CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
-		ComPtr<IDXGIFactory5> dxgi5;
-		DXGIFactory->QueryInterface(IID_PPV_ARGS(&dxgi5));
-		CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
-		DXGIFactory = dxgi5;
+			fbxSdkManager = FbxManager::Create();
+			FbxImporter* fbxImportor = FbxImporter::Create(fbxSdkManager, "");
+			FbxIOSettings* pIOsettings = FbxIOSettings::Create(fbxSdkManager, IOSROOT);
+			fbxSdkManager->SetIOSettings(pIOsettings);
 
-		// 測試看看是否支援關閉垂直同步
-		dxgi5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &TearingSupport, sizeof(TearingSupport));
+			if (fbxImportor->Initialize("./Resource/studio_objs.fbx", -1, fbxSdkManager->GetIOSettings())) {
+				fbxScene = FbxScene::Create(fbxSdkManager, "");
+				if (fbxImportor->Import(fbxScene) == false) {
+					fbxScene->Destroy();
+					fbxScene = nullptr;
+				} else {
+					OutputDebug(TEXT("Load FBX success\n"));
+					// Populate the FBX file format version numbers with the import file.
+					int major, minor, revision;
+					fbxImportor->GetFileVersion(major, minor, revision);
+					OutputDebug(TEXT("FBX File Version: %d %d %d\n"), major, minor, revision);
+					
+					if (FbxNode* fbxRootNode = fbxScene->GetRootNode()) {
+						PrintFBXHierarchy(fbxRootNode);
+					}
+				}
+			}
 
-		// 選擇繪圖介面卡
-		ComPtr<IDXGIAdapter> adapter = FindAdapter();
-		if (adapter == nullptr) {
-			CHECKRETURN(E_FAIL, TEXT("FindAdapter"));
-		}
+			if (fbxImportor) fbxImportor->Destroy();
+
+			HRESULT hr;
+			// 在此線程初始化 COM 組件調用模式，並且設定同步/非同步類型
+			hr = CoInitializeEx(nullptr, COINITBASE_MULTITHREADED);
+			CHECKRETURN(hr, TEXT("CoInitialize"));
+
+			Info = make_unique<DeviceInfo>();
+
+			// 獲得系統資訊
+			GetWMIData();
+
+			// 獲得DXGI介面
+			hr = CreateDXGIFactory(IID_PPV_ARGS(&DXGIFactory));
+			CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
+			ComPtr<IDXGIFactory5> dxgi5;
+			DXGIFactory->QueryInterface(IID_PPV_ARGS(&dxgi5));
+			CHECKRETURN(hr, TEXT("CreateDXGIFactory"));
+			DXGIFactory = dxgi5;
+
+			// 測試看看是否支援關閉垂直同步
+			dxgi5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &TearingSupport, sizeof(TearingSupport));
 			
-		CreateDevice(adapter);
-	}
+			// 選擇繪圖介面卡
+			ComPtr<IDXGIAdapter> adapter = FindAdapter();
+			if (adapter == nullptr) {
+				CHECKRETURN(E_FAIL, TEXT("FindAdapter"));
+			}
+			
+			CreateDevice(adapter);
+
+			hr = CoCreateInstance(
+				CLSID_WICImagingFactory,
+				NULL,
+				CLSCTX_INPROC_SERVER,
+				IID_PPV_ARGS(&WICImagingFactory)
+			);
+			CHECKRETURN(hr, TEXT("Create WICImagingFactory"));
+		}
 
 		public:
 		~DirectXPanel() {
 			Clear();
-			// Closes the COM library on the current thread
+			// Closes the COM library before exit
 			CoUninitialize();
+		}
+
+		private:
+		void Initialize(HWND hWnd) {
+			
+			if (!CreateSwapChain(hWnd)) return;
+
+			CreateRenderTargetView();
+			CreateDepthStencilView();
+			PrepareData();
+
+			LoadShader(ImmediateContext.Get());
+			SetupPipeline(ImmediateContext.Get());
+			SetViewport(ImmediateContext.Get());
+
+			//CommonStates states = CommonStates(D3D11Device.Get());
+			//auto cull = states.CullCounterClockwise();
+			//ImmediateContext->RSSetState(cull);
+
+			PrepareDirect2D();
+			QueryPerformanceCounter(&time);
+			QueryPerformanceFrequency(&freq);
 		}
 
 		private:
@@ -59,7 +116,7 @@ namespace MyGame {
 
 				HRESULT hr = E_FAIL;
 
-				D3D_FEATURE_LEVEL featureLevels[] =
+				D3D_FEATURE_LEVEL featureLevels[2] =
 				{
 					D3D_FEATURE_LEVEL_11_1,
 					D3D_FEATURE_LEVEL_11_0,
@@ -67,29 +124,22 @@ namespace MyGame {
 
 				D3D11_CREATE_DEVICE_FLAG flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 
-				hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-					flags,
-					featureLevels, ARRAYSIZE(featureLevels),
-					D3D11_SDK_VERSION,
-					&D3D11Device, &FeatureLevel, &ImmediateContext);
+				hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, featureLevels, sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL),
+					D3D11_SDK_VERSION, &D3D11Device, &FeatureLevel, &ImmediateContext);
 
 				if (hr == E_INVALIDARG) {
 					// DirectX 11.0 認不得 D3D_FEATURE_LEVEL_11_1 所以需要排除他,然後再試一次
-					hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, &featureLevels[1], ARRAYSIZE(featureLevels) - 1,
+					hr = D3D11CreateDevice(DXGIAdapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, flags, &featureLevels[1], sizeof(featureLevels) / sizeof(D3D_FEATURE_LEVEL) - 1,
 						D3D11_SDK_VERSION, &D3D11Device, &FeatureLevel, &ImmediateContext);
-					CHECKRETURN(hr, TEXT("D3D11CreateDevice"));
-				} else if (hr == E_FAIL) {
-					CHECKRETURN(E_FAIL, TEXT("D3D11CreateDevice"));
 				}
 
-				hr = D3D11Device->CreateDeferredContext(0, &DeferredContext);
-				CHECKRETURN(hr, TEXT("CreateDeferredContext"));				
+				CHECKRETURN(hr, TEXT("D3D11CreateDevice"));
 
 				DXGI_ADAPTER_DESC desc;
-				ZeroMemory(&desc, sizeof(desc));
+				ZeroMemory(&desc, sizeof(DXGI_ADAPTER_DESC));
 				hr = DXGIAdapter->GetDesc(&desc);
 				CHECKRETURN(hr, TEXT("Adapter GetDesc"));
-				Info = make_unique<DeviceInfo>();
+				
 				Info->FeatureLevel = FeatureLevel;
 				Info->VendorId = desc.VendorId;
 				Info->DeviceId = desc.DeviceId;
@@ -101,11 +151,16 @@ namespace MyGame {
 					hr = D3D11Device->CheckMultisampleQualityLevels(DXGI_FORMAT_B8G8R8A8_UNORM, i, &MsaaQuality);
 					MsaaQualities.push_back(MsaaQuality);
 				}
+
+				// 檢查驅動程式有無支援 MultiThreading
+				// https://msdn.microsoft.com/zh-tw/library/windows/desktop/ff476893(v=vs.85).aspx
+				hr = D3D11Device->CheckFeatureSupport(D3D11_FEATURE_THREADING, &ThreadingSupport, sizeof(D3D11_FEATURE_DATA_THREADING));
+				CHECKRETURN(hr, TEXT("CheckFeatureSupport Multithreading"));
 			}
 		}
 
-		public:
-		void CreateSwapChain(HWND hwnd) {
+		private:
+		BOOL CreateSwapChain(HWND hwnd) {
 			if (DXGIFactory.Get()) {
 				HRESULT hr;
 				ComPtr<IDXGIFactory2> fac2;
@@ -119,14 +174,10 @@ namespace MyGame {
 						hr = ImmediateContext->QueryInterface(IID_PPV_ARGS(&dc1));
 						if (SUCCEEDED(hr)) {
 							ImmediateContext = dc1;
-							//CurrentContext = ImmediateContext;
-							CurrentContext = DeferredContext;
 						}
 					}
 				}
-			
-					
-
+				
 				RECT rect;
 				GetClientRect(hwnd, &rect);
 				ZeroMemory(&SwapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC1));
@@ -152,23 +203,18 @@ namespace MyGame {
 				hWnd = hwnd;
 
 				hr = fac2->CreateSwapChainForHwnd(D3D11Device.Get(), hWnd, &SwapChainDesc, nullptr, nullptr, SwapChain.ReleaseAndGetAddressOf());
-				CHECKRETURN(hr, TEXT("Create SwapChain1"));
+				if (CheckFailed(hr, TEXT("Create SwapChain1"))) return FALSE;
 
 				CreateD2DDeviceContextFromSwapChain(SwapChain);
 
 				if (!Tearing) {
 					CheckMenuItem(GetMenu(hWnd), IDM_TEARING, MF_CHECKED);
 				}
-			}
-		}
 
-		public:
-		void CreateResource() {
-			CreateRenderTargetView();
-			SetViewport();
-			LoadShader();
-			PreparePipeline();
-			PrepareDirect2D();
+				return TRUE;
+			}
+
+			return FALSE;
 		}
 
 		private:
@@ -228,28 +274,94 @@ namespace MyGame {
 				hr = D3D11Device->CreateRenderTargetView(backBuffer.Get(), nullptr, &RenderTargetView);
 				CHECKRETURN(hr, TEXT("CreateRenderTargetView"));
 				backBuffer.Reset();
-				CurrentContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
 			}
 		}
 
-		private:
-		void SetViewport() {
-			if (CurrentContext.Get()) {
+		private: 
+		void CreateDepthStencilView() {
+			if (hWnd && D3D11Device.Get()) {
 				RECT rect;
 				GetClientRect(hWnd, &rect);
-				D3D11_VIEWPORT vp;
-				vp.TopLeftX = 0;
-				vp.TopLeftY = 0;
-				vp.Width = ceilf((float)rect.right - (float)rect.left);
-				vp.Height = ceilf((float)rect.bottom - (float)rect.top);
-				vp.MinDepth = 0.0f;
-				vp.MaxDepth = 1.0f;
-				CurrentContext->RSSetViewports(1, &vp);
+
+				////////////////////////////////////////
+				// Create a Depth-Stencil Resource
+				////////////////////////////////////////
+
+				D3D11_TEXTURE2D_DESC desc;
+				ZeroMemory(&desc, sizeof(D3D11_TEXTURE2D_DESC));
+				desc.Width = SwapChainDesc.Width;
+				desc.Height = SwapChainDesc.Height;
+				desc.MipLevels = 1;
+				desc.ArraySize = 1;
+				desc.Format = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+				desc.SampleDesc.Count = 1;
+				desc.SampleDesc.Quality = 0;
+				desc.Usage = D3D11_USAGE_DEFAULT;
+				desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+				desc.CPUAccessFlags = 0;
+				desc.MiscFlags = 0;
+
+				HRESULT hr;
+				ComPtr<ID3D11Texture2D> depthStencilTexture;
+				hr = D3D11Device->CreateTexture2D(&desc, nullptr, &depthStencilTexture);
+				CHECKRETURN(hr, TEXT("Create DepthTexture"));
+
+				////////////////////////////////////////
+				// Create Depth-Stencil State
+				////////////////////////////////////////
+				/***
+				D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
+				ZeroMemory(&depthStencilDesc, sizeof(D3D11_DEPTH_STENCIL_DESC));
+
+				// Depth test parameters
+				depthStencilDesc.DepthEnable = true;
+				depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+				depthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS;
+
+				// Stencil test parameters
+				depthStencilDesc.StencilEnable = true;
+				depthStencilDesc.StencilReadMask = 0xFF;
+				depthStencilDesc.StencilWriteMask = 0xFF;
+
+				// Stencil operations if pixel is front-facing
+				depthStencilDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+				depthStencilDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+				depthStencilDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+				depthStencilDesc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+				// Stencil operations if pixel is back-facing.
+				depthStencilDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+				depthStencilDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+				depthStencilDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+				depthStencilDesc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+				hr = D3D11Device->CreateDepthStencilState(&depthStencilDesc, &DepthStencilState);
+				CHECKRETURN(hr, TEXT("CreateDepthStencilState"));
+				/****/
+
+				D3D11_DEPTH_STENCIL_VIEW_DESC descDSV;
+				ZeroMemory(&descDSV, sizeof(D3D11_DEPTH_STENCIL_VIEW_DESC));
+				descDSV.Format = desc.Format;
+				descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+				descDSV.Texture2D.MipSlice = 0;
+
+				hr = D3D11Device->CreateDepthStencilView(depthStencilTexture.Get(), &descDSV, &DepthStencilView);
+				CHECKRETURN(hr, TEXT("CreateDepthStencilView"));
 			}
 		}
 
 		private:
-		void LoadShader() {		
+		void SetViewport(ID3D11DeviceContext* context) {
+			if (context) {
+				RECT rect;
+				GetClientRect(hWnd, &rect);
+				Viewport vp(0, 0, ceilf((float)rect.right - (float)rect.left), ceilf((float)rect.bottom - (float)rect.top));
+				// 設定Render好的場景要畫在backbuffer的哪個區域(通常是全部的backbuffer區域)
+				context->RSSetViewports(1, vp.Get11());
+			}
+		}
+
+		private:
+		void LoadShader(ID3D11DeviceContext* context) {		
 			if (D3D11Device.Get()) {
 				HRESULT hr;
 				ShaderCode vertexShaderCode;
@@ -259,18 +371,18 @@ namespace MyGame {
 
 				D3D11_INPUT_ELEMENT_DESC layout[] =
 				{
-					{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-					{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 16, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-					{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+					{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0,	D3D11_INPUT_PER_VERTEX_DATA, 0 },
+					{ "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 16, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+					{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,		 0,	32, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 				};
-
+				
 				// Create the input layout
-				hr = D3D11Device->CreateInputLayout(layout, ARRAYSIZE(layout), vertexShaderCode.Code,
+				hr = D3D11Device->CreateInputLayout(layout, sizeof(layout) / sizeof(D3D11_INPUT_ELEMENT_DESC), vertexShaderCode.Code,
 					vertexShaderCode.Length, VertexLayout.ReleaseAndGetAddressOf());
 				CHECKRETURN(hr, TEXT("Create VertexLayout"));
 
-				// Set the input layout
-				CurrentContext->IASetInputLayout(VertexLayout.Get());
+				// Set the input layout to the input-assembler
+				context->IASetInputLayout(VertexLayout.Get());
 
 				// Load Shader bytecode
 				ShaderCode pixelShaderCode;
@@ -288,8 +400,8 @@ namespace MyGame {
 				CHECKRETURN(hr, TEXT("CreatePixelShader"));
 
 				// Set Shader
-				CurrentContext->VSSetShader(VertexShader.Get(), nullptr, 0);
-				CurrentContext->PSSetShader(PixelShader.Get(), nullptr, 0);
+				context->VSSetShader(VertexShader.Get(), nullptr, 0);
+				context->PSSetShader(PixelShader.Get(), nullptr, 0);
 
 				//ShaderCode shaderCode;
 				//shaderCode.LoadFromFile(TEXT("Sample.cso"));
@@ -300,114 +412,148 @@ namespace MyGame {
 		}
 
 		private:
-		void Test() {
+		void PrepareData() {
+			
 			HRESULT hr;
-			//hr = CreateDDSTextureFromFile(D3D11Device.Get(), L"seafloor.dds", nullptr, &ShaderRV);
-			//CHECKRETURN(hr, TEXT("CreateDDSTextureFromFile"));
+			RECT rect;
+			GetClientRect(hWnd, &rect);
+			float w = abs((float)rect.right - (float)rect.left);
+			float h = abs((float)rect.bottom - (float)rect.top);
 
-			hr = CreateWICTextureFromFile(D3D11Device.Get(), L"helloworld.png", nullptr, &resourceView);
-			CHECKRETURN(hr, TEXT("CreateWICTextureFromFile"));
-			D3D11_SAMPLER_DESC sampDesc;
-			ZeroMemory(&sampDesc, sizeof(sampDesc));
-			sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-			sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-			sampDesc.MinLOD = 0;
-			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-			hr = D3D11Device->CreateSamplerState(&sampDesc, SamplerState.ReleaseAndGetAddressOf());
-			CHECKRETURN(hr, TEXT("CreateSamplerState"));
-			CurrentContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
-			CurrentContext->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
+			// Hierarchy
+			// http://help.autodesk.com/view/FBX/2018/ENU/?guid=FBX_Developer_Help_importing_and_exporting_a_scene_importing_a_scene_html
+			if (FbxNode* fbxRootNode = fbxScene->GetRootNode()) {
+				for (int i = 0; i < fbxRootNode->GetChildCount(); i++) {
+					FbxNode* fbxChildNode = fbxRootNode->GetChild(i);
+					if (fbxChildNode->GetNodeAttribute() == NULL) continue;
+					const char* name = fbxChildNode->GetName();
+					if (strcmp(name, "film_camera") == 0) {
+						fbxChildNode = fbxChildNode->GetChild(0);
+						name = fbxChildNode->GetName();
+						for (int k = 0; k < fbxChildNode->GetChildCount(); k++) {
+							
+							FbxNode* child = fbxChildNode->GetChild(k);
+							if (child->GetNodeAttribute() == NULL) continue;
+							name = child->GetName();
+							FbxNodeAttribute::EType AttributeType = child->GetNodeAttribute()->GetAttributeType();
+
+							if (AttributeType == FbxNodeAttribute::eMesh) {
+								FbxMesh* mesh = (FbxMesh*)child->GetNodeAttribute();
+								FbxVector4* fbxVertices = mesh->GetControlPoints();
+								int controlPointsCount = mesh->GetControlPointsCount();
+
+								for (int j = 0; j < controlPointsCount; j++) {
+									SimpleVertex v;
+									v.Position = XMFLOAT4(
+										(float)fbxVertices[j].mData[0],
+										(float)fbxVertices[j].mData[1],
+										(float)fbxVertices[j].mData[2],
+										1.0f);
+									vertices.push_back(v);
+								}
+
+								int cPolygonCount = mesh->GetPolygonCount();
+								for (int j = 0; j < cPolygonCount; j++) {
+									int iNumVertices = mesh->GetPolygonSize(j);
+
+									for (int k = 0; k < iNumVertices; k++) {
+										int iControlPointIndex = mesh->GetPolygonVertex(j, k);
+										indices.push_back(iControlPointIndex);
+									}
+								}
+							}
+						}
+						break;
+					}
+				}
+			}
+
+
+			// 模型資料
+			//SimpleVertex vertices[] =
+			//{
+			//	XMFLOAT4(-w / 5.0f, h / 5.0f, 200.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
+			//	XMFLOAT4(w / 5.0f, h / 5.0f, 200.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
+			//	XMFLOAT4(-w / 5.0f, -h / 5.0f, 200.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
+			//	XMFLOAT4(w / 5.0f, -h / 5.0f, 200.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
+			//	XMFLOAT4(-w / 8.0f, h / 8.0f, -200.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
+			//	XMFLOAT4(w / 8.0f, h / 8.0f, -200.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
+			//	XMFLOAT4(-w / 8.0f, -h / 8.0f, -200.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
+			//	XMFLOAT4(w / 8.0f, -h / 8.0f, -200.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
+			//};
+
+			// 建立模型頂點緩衝區
+			D3D11_BUFFER_DESC bd;
+			ZeroMemory(&bd, sizeof(bd));
+			bd.Usage = D3D11_USAGE_DEFAULT;
+			bd.ByteWidth = vertices.size() * sizeof(SimpleVertex);
+			bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+			bd.CPUAccessFlags = 0;
+			D3D11_SUBRESOURCE_DATA srd;
+			ZeroMemory(&srd, sizeof(srd));
+			srd.pSysMem = vertices.data();
+			hr = D3D11Device->CreateBuffer(&bd, &srd, &VertexBuffer);
+			CHECKRETURN(hr, TEXT("Create VertexBuffer"));
+
+			// 建立模型頂點索引緩衝區
+			D3D11_BUFFER_DESC indexDesc;
+			ZeroMemory(&indexDesc, sizeof(indexDesc));
+			indexDesc.ByteWidth = indices.size() * sizeof(int);
+			indexDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+			indexDesc.Usage = D3D11_USAGE_DEFAULT;
+			indexDesc.CPUAccessFlags = 0;
+			D3D11_SUBRESOURCE_DATA indexsrd;
+			ZeroMemory(&indexsrd, sizeof(indexsrd));
+			indexsrd.pSysMem = indices.data();
+			hr = D3D11Device->CreateBuffer(&indexDesc, &indexsrd, &IndexBuffer);
+			CHECKRETURN(hr, TEXT("Create IndexBuffer"));
+
+			// 建立常量緩衝區
+			D3D11_BUFFER_DESC constDesc;
+			ZeroMemory(&constDesc, sizeof(constDesc));
+			constDesc.ByteWidth = sizeof(XMMATRIX);
+			constDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+			constDesc.Usage = D3D11_USAGE_DEFAULT;
+			constDesc.CPUAccessFlags = 0;
+			hr = D3D11Device->CreateBuffer(&constDesc, NULL, &ConstantBuffer);
+			CHECKRETURN(hr, TEXT("Create ConstBuffer"));
 		}
 
 		private:
-		void PreparePipeline() {
-			// Create vertex buffer
-			if (CurrentContext.Get()) {
-				HRESULT hr;
+		void SetupPipeline(ID3D11DeviceContext* context) {
+			UINT stride = sizeof(SimpleVertex);
+			UINT offset = 0;
+			
+			context->IASetVertexBuffers(0, 1, VertexBuffer.GetAddressOf(), &stride, &offset);
+			context->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+			context->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
 
-				RECT rect;
-				GetClientRect(hWnd, &rect);
-				float w = (float)rect.right - (float)rect.left;
-				float h = (float)rect.bottom - (float)rect.top;
+			// 設定初始狀態
+			eye = Vector3(0.0f, 0.0f, -150.0f);
+			focus_target = Vector3(0.0f, 0.0f, 0.0f);
+			up = Vector3(0.0f, 1.0f, 0.0f);
 
-				SimpleVertex vertices[] =
-				{
-					XMFLOAT4(-w / 2.0f, h / 2.0f, 10.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f),
-					XMFLOAT4(w / 2.0f, h / 2.0f, 10.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f),
-					XMFLOAT4(-w / 2.0f, -h / 2.0f, 10.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 1.0f),
-					XMFLOAT4(w / 2.0f, -h / 2.0f, 10.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
-				};
+			// 使用右手坐標系
+			view = Matrix::CreateLookAt(eye, focus_target, up);
 
-				D3D11_BUFFER_DESC bd;
-				ZeroMemory(&bd, sizeof(bd));
-				bd.Usage = D3D11_USAGE_DEFAULT;
-				bd.ByteWidth = sizeof(SimpleVertex) * ARRAYSIZE(vertices);
-				bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-				bd.CPUAccessFlags = 0;
-				D3D11_SUBRESOURCE_DATA srd;
-				ZeroMemory(&srd, sizeof(srd));
-				srd.pSysMem = vertices;
-				hr = D3D11Device->CreateBuffer(&bd, &srd, &VertexBuffer);
-				CHECKRETURN(hr, TEXT("Create VertexBuffer"));
 
-				// Set vertex buffer
-				UINT stride = sizeof(SimpleVertex);
-				UINT offset = 0;
-				CurrentContext->IASetVertexBuffers(0, 1, VertexBuffer.GetAddressOf(), &stride, &offset);
 
-				// IndexBuffer
-				UINT indices[] = { 0, 1, 2, 1, 3, 2 };
-				D3D11_BUFFER_DESC indexDesc;
-				ZeroMemory(&indexDesc, sizeof(indexDesc));
-				indexDesc.ByteWidth = sizeof(UINT) * 6;
-				indexDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-				indexDesc.Usage = D3D11_USAGE_DEFAULT;
-				indexDesc.CPUAccessFlags = 0;
+			RECT rect;
+			GetClientRect(hWnd, &rect);
+			float width = ceilf(((float)rect.right - (float)rect.left) / 500.0f);
+			float height = ceilf(((float)rect.bottom - (float)rect.top) / 500.0f);
+			projection = XMMatrixPerspectiveRH(width, height, nearZ, farZ);
 
-				// Set IndexBuffer
-				D3D11_SUBRESOURCE_DATA indexsrd;
-				ZeroMemory(&indexsrd, sizeof(indexsrd));
-				indexsrd.pSysMem = indices;
-				hr = D3D11Device->CreateBuffer(&indexDesc, &indexsrd, &IndexBuffer);
-				CHECKRETURN(hr, TEXT("Create IndexBuffer"));
-				CurrentContext->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+			// 設置變換矩陣給著色器
+			Matrix transform = world * view * projection;
+			context->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
 
-				// Set Transform
-				D3D11_BUFFER_DESC constDesc;
-				ZeroMemory(&constDesc, sizeof(constDesc));
-				constDesc.ByteWidth = sizeof(XMMATRIX);
-				constDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-				constDesc.Usage = D3D11_USAGE_DEFAULT;
-				constDesc.CPUAccessFlags = 0;
-				hr = D3D11Device->CreateBuffer(&constDesc, NULL, &ConstantBuffer);
-				CHECKRETURN(hr, TEXT("Create ConstBuffer"));
-				CurrentContext->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
+			// 設定多邊形拓樸類型
+			context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 
-				world = XMMatrixIdentity();
-
-				eye = XMFLOAT3(0.05f, 0.0f, -5.0f);
-				focus = XMFLOAT3(0.0f, 0.0f, 15.5f);
-				up = XMFLOAT3(0.0f, 1.0f, 0.0f);
-				view = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&focus), XMLoadFloat3(&up));
-
-				float width = ceilf(((float)rect.right - (float)rect.left) / 2.0f);
-				float height = ceilf(((float)rect.bottom - (float)rect.top) / 2.0f);
-				float nearZ = 5.0f, farZ = 100.0f;
-				projection = XMMatrixPerspectiveLH(width, height, nearZ, farZ);
-
-				// 設置變換矩陣給Shader
-				XMMATRIX transform = world * view * projection;
-				CurrentContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
-
-				// Set primitive topology
-				CurrentContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-				QueryPerformanceCounter(&time);
-				QueryPerformanceFrequency(&freq);
-			}
+			// 把DepthStencilView綁定到Output-Merger
+			context->OMSetDepthStencilState(DepthStencilState.Get(), 1);
+			context->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), DepthStencilView.Get());
 		}
 
 		private:
@@ -456,57 +602,69 @@ namespace MyGame {
 				float offsetX = 0.0f, offsetY = 0.0f;
 
 				switch (msg.message) {
-				case WM_KEYDOWN:
-				{
-					switch (LOBYTE(msg.wParam))
+					case WM_KEYDOWN:
 					{
-					case 'W':
-						offsetY = 10.0f;
-						break;
-					case 'S':
-						offsetY = -10.0f;
-						break;
-					case 'A':
-						offsetX = -10.0f;
-						break;
-					case 'D':
-						offsetX = 10.0f;
-						break;
-					case VK_PROCESSKEY: // IME key
-						break;
-					default:
-						break;
+						switch (LOBYTE(msg.wParam))
+						{
+						case 'W':
+							offsetY = 10.0f;
+							break;
+						case 'S':
+							offsetY = -10.0f;
+							break;
+						case 'A':
+							offsetX = -10.0f;
+							break;
+						case 'D':
+							offsetX = 10.0f;
+							break;
+						case VK_PROCESSKEY: // IME key
+							break;
+						default:
+							break;
+						}
+						world = world * XMMatrixTranslation(offsetX, offsetY, 0.0f);
 					}
-					world = world * XMMatrixTranslation(offsetX, offsetY, 0.0f);
-				}
-				break;
-				case WM_CHAR:
-					OutputDebug(TEXT("Char = %c\n"), LODWORD(msg.wParam));
 					break;
-				case WM_MOUSEWHEEL:
-				{
-					auto x = (SHORT)HIWORD(msg.wParam) / 120;
-					eye.z += (float)x;
-					view = XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&focus), XMLoadFloat3(&up));
-					OutputDebug(TEXT("Wheel = %d\n"), x);
-				}
+					case WM_CHAR:
+						OutputDebug(TEXT("Char = %c\n"), LODWORD(msg.wParam));
+						break;
+					case WM_MOUSEWHEEL:
+					{
+						int x = (SHORT)HIWORD(msg.wParam) / 120;
+						Matrix scale = Matrix::CreateScale(1.0f - 0.1f * x);
+						eye = Vector3::Transform(eye, scale);
+						view = Matrix::CreateLookAt(eye, focus_target, up);
+					}
 					break;
-				}
+					case WM_LBUTTONDOWN:
+						point = MAKEPOINTS(msg.lParam);
+						break;
+					case WM_MOUSEMOVE:
+						if (msg.wParam & MK_LBUTTON) {
 
-				XMMATRIX transform;
-				transform = world * view * projection;
-				CurrentContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
+							POINTS p = MAKEPOINTS(msg.lParam);
+							POINTS offs;
+							offs.x = p.x - point.x;
+							offs.y = p.y - point.y;
+							point = p;
+
+							Matrix rotate = Matrix::CreateFromYawPitchRoll(-offs.x * XM_PI / 180.0f / 3.0f, offs.y * XM_PI / 180.0f / 3.0f, 0.0f);
+							eye = Vector3::Transform(eye, rotate);
+							view = Matrix::CreateLookAt(eye, focus_target, up);
+						}
+						break;
+				}
 			}
 		}
 
-		public:
-		void Update() {
-			HandleUserControl();
+		private:
+		void GetFPS() {
 			LARGE_INTEGER now;
-			QueryPerformanceCounter(&now);			
+			QueryPerformanceCounter(&now);
 			__int64 ElapsedCount = (now.QuadPart - time.QuadPart);
 			double Elapsed = ElapsedCount * 1000.0 / freq.QuadPart;
-			const double UpdatePeriod = 200.0;
+			const double UpdatePeriod = 100.0;
 			if (Elapsed > UpdatePeriod) {
 				double fps = 1000.0 * fpsCounter / Elapsed;
 				fpsString.Format(TEXT("%.2lf"), fps);
@@ -516,35 +674,50 @@ namespace MyGame {
 			fpsCounter++;
 		}
 
-		public:
+		private:
 		void Render() {
-			if (CurrentContext.Get() && SwapChain.Get()) {
-				// 把RenderTargetView綁定到Output-Merger Stage
-				// 注意這裡是GetAddressOf,而不是ReleaseAndGetAddressOf
-				CurrentContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
-				// 填滿背景色
-				CurrentContext->ClearRenderTargetView(RenderTargetView.Get(), Colors::CadetBlue);
+			
+			if (indices.size()) {
+				ImmediateContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
+				ImmediateContext->ClearDepthStencilView(DepthStencilView.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+				FLOAT color[4] = { 47 / 255.0f, 51 / 255.0f, 61 / 255.0f, 255 / 255.0f };
+				ImmediateContext->ClearRenderTargetView(RenderTargetView.Get(), color);
 
-				CurrentContext->DrawIndexed(6, 0, 0);
+				XMMATRIX transform;
+				transform = world * view * projection;
+				ImmediateContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
 
-				ComPtr<ID3D11CommandList> cmdList;
-				CurrentContext->FinishCommandList(TRUE, &cmdList);
-				ImmediateContext->ExecuteCommandList(cmdList.Get(), FALSE);
+				if (SamplerState.Get() && ResourceView.Get()) {
+					ImmediateContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
+					ImmediateContext->PSSetShaderResources(0, 1, ResourceView.GetAddressOf());
+				}
 
+				ImmediateContext->DrawIndexed(indices.size(), 0, 0);
+
+				GetFPS();
 				Direct2DRneder();
 
 				// 把畫好的結果輸出到螢幕上！
-				SwapChain->Present(Tearing ? 0 : 1, Tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
+				SwapChain->Present(0, Tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 			}
 		}
 
 		public:
-		HANDLE StartGameLoop() {
+		HANDLE StartGameLoop(HWND hWnd) {
 			if (Running == false) {
 				Running = true;
+				Initialize(hWnd);
 				return CreateThread(NULL, 0, GameLoop, this, 0, NULL);
 			}
 			return NULL;
+		}
+
+		private:
+		void Run() {
+			while (Running) {
+				HandleUserControl();
+				Render();
+			}
 		}
 
 		public:
@@ -555,11 +728,13 @@ namespace MyGame {
 		private:
 		static DWORD WINAPI GameLoop(PVOID pParam) {
 			DirectXPanel* _this = (DirectXPanel*)pParam;
-			while (_this->Running) {
-				_this->Update();
-				_this->Render();
-			}
+			_this->Run();
 			return 0;
+		}
+
+		private:
+		static DWORD WINAPI CreateDeferredContext(PVOID pParam) {
+
 		}
 
 		private:
@@ -574,9 +749,9 @@ namespace MyGame {
 		}
 
 		void CreateWICTexture(byte* data, size_t size) {
-			ComPtr<ID3D11ShaderResourceView> resourceView;
+			
 			HRESULT hr;
-			hr = CreateWICTextureFromMemory(D3D11Device.Get(), ImmediateContext.Get(), data, size, nullptr, &resourceView);
+			hr = CreateWICTextureFromMemory(D3D11Device.Get(), ImmediateContext.Get(), data, size, nullptr, &ResourceView);
 			CHECKRETURN(hr, TEXT("CreateWICTextureFromMemory"));
 
 			D3D11_SAMPLER_DESC sampDesc;
@@ -590,9 +765,6 @@ namespace MyGame {
 			sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
 			hr = D3D11Device->CreateSamplerState(&sampDesc, SamplerState.ReleaseAndGetAddressOf());
 			CHECKRETURN(hr, TEXT("CreateSamplerState"));
-			CurrentContext->PSSetSamplers(0, 1, SamplerState.GetAddressOf());
-			CurrentContext->PSSetShaderResources(0, 1, resourceView.GetAddressOf());
-
 		}
 
 		public:
@@ -624,6 +796,7 @@ namespace MyGame {
 					if (hData) {
 						DWORD nRead;
 						if (ReadFile(hFile, hData, size, &nRead, NULL)) {
+							OutputDebug(TEXT("Create Texture %s\n"), ofn.lpstrFile);
 							CreateTexture((BYTE*)hData, size);
 						}
 						GlobalFree(hData);
@@ -658,11 +831,101 @@ namespace MyGame {
 			}
 		}
 
+		private:
+		void GetWMIData() {
+			HRESULT hr;
+			hr = CoInitializeSecurity(
+				NULL,                       // security descriptor
+				-1,                          // use this simple setting
+				NULL,                        // use this simple setting
+				NULL,                        // reserved
+				RPC_C_AUTHN_LEVEL_DEFAULT,   // authentication level  
+				RPC_C_IMP_LEVEL_IMPERSONATE, // impersonation level
+				NULL,                        // use this simple setting
+				EOAC_NONE,                   // no special capabilities
+				NULL);                          // reserved
+			CHECKRETURN(hr, TEXT("CoInitializeSecurity"));
+
+			ComPtr<IWbemLocator> Locator;
+			hr = CoCreateInstance(
+				CLSID_WbemLocator,
+				NULL,
+				CLSCTX_INPROC_SERVER,
+				IID_PPV_ARGS(&Locator));
+
+			CHECKRETURN(hr, TEXT("CoCreateInstance IWbemLocator"));
+
+			ComPtr<IWbemServices> Services;
+			hr = Locator->ConnectServer(
+				_bstr_t(L"ROOT\\CIMV2"), // Object path of WMI namespace
+				NULL,                    // User name. NULL = current user
+				NULL,                    // User password. NULL = current
+				0,                       // Locale. NULL indicates current
+				NULL,                    // Security flags.
+				0,                       // Authority (for example, Kerberos)
+				0,                       // Context object 
+				&Services                // pointer to IWbemServices proxy
+			);
+
+			CHECKRETURN(hr, TEXT("Fail to Connect WMI Server"));
+
+			OutputDebug(TEXT("Connected to ROOT\\CIMV2 WMI namespace\n"));
+
+
+			ComPtr<IEnumWbemClassObject> Enumerator;
+			hr = Services->ExecQuery(
+				bstr_t("WQL"),
+				bstr_t("SELECT * FROM Win32_Processor"),
+				WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+				NULL,
+				&Enumerator);
+
+			CHECKRETURN(hr, TEXT("Exec WMI Query"));
+
+
+			
+			ULONG uReturn = 0;
+
+			while (Enumerator.Get())
+			{
+				IWbemClassObject* clsObj;
+				HRESULT hr = Enumerator->Next(WBEM_INFINITE, 1,
+					&clsObj, &uReturn);
+
+				if (0 == uReturn)
+				{
+					break;
+				}
+
+				VARIANT vtProp;
+
+				// Get the value of the Name property
+				hr = clsObj->Get(L"NumberOfCores", 0, &vtProp, 0, 0);
+				if (SUCCEEDED(hr) && vtProp.vt == VT_I4) {
+					Info->NumberOfCores = vtProp.intVal;
+					OutputDebug(TEXT("NumberOfCores : %d\n"), vtProp.intVal);
+				}
+				hr = clsObj->Get(L"NumberOfLogicalProcessors", 0, &vtProp, 0, 0);
+				if (SUCCEEDED(hr) && vtProp.vt == VT_I4) {
+					Info->NumberOfLogicalProcessors = vtProp.intVal;
+					OutputDebug(TEXT("NumberOfLogicalProcessors : %d\n"), vtProp.intVal);
+				}
+
+				VariantClear(&vtProp);
+				clsObj->Release();
+			}
+		}
+
 		public:
 		bool ToggleTearing() {
 			if (TearingSupport) {
 				Tearing = !Tearing;
 			}
+			return Tearing;
+		}
+
+		public:
+		bool GetTearing() {
 			return Tearing;
 		}
 
@@ -709,14 +972,48 @@ namespace MyGame {
 			return nullptr;
 		}
 
+		private:
+		void PrintFBXHierarchy(FbxNode* node, int h = 0) {
+			
+			int count = node->GetChildCount();
+
+			if (h > 0 && node->GetNodeAttribute()) {
+				FbxNodeAttribute::EType AttributeType = node->GetNodeAttribute()->GetAttributeType();
+
+				const char* name = node->GetName();
+				String t(strlen(name));
+				MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, name, -1, (wchar_t*)t, t.Length());;
+				for (int j = 1; j < h; j++) OutputDebug(TEXT("　　"));
+				OutputDebug(TEXT("└─"));
+				OutputDebug(TEXT(" %s (%d)\n"), t.c_str(), AttributeType);
+
+				if (AttributeType == FbxNodeAttribute::eNull) {
+					for (int i = 0; i < count; i++) {
+						FbxNode* n = node->GetChild(i);
+						PrintFBXHierarchy(n, h + 1);
+					}
+				}
+			} else {
+				for (int i = 0; i < count; i++) {
+					FbxNode* n = node->GetChild(i);
+					PrintFBXHierarchy(n, h + 1);
+				}
+			}
+		}
+
 		private: 
 		void Clear() {
+			if (fbxScene) {
+				fbxScene->Destroy();
+			}
+			if (fbxSdkManager) {
+				fbxSdkManager->Destroy();
+			}
 			TextBrush.Reset();
 			InfoTextFormat.Reset();
 			FPSFormat.Reset();
 			DWriteFactory.Reset();
 			SamplerState.Reset();
-			resourceView.Reset();
 			IndexBuffer.Reset();
 			VertexBuffer.Reset();
 			PixelShader.Reset();
@@ -737,29 +1034,28 @@ namespace MyGame {
 		D3D_FEATURE_LEVEL FeatureLevel;
 		ComPtr<ID3D11Device> D3D11Device;
 		std::vector<UINT> MsaaQualities;
-			
+
 		ComPtr<ID3D11DeviceContext> ImmediateContext;
-		ComPtr<ID3D11DeviceContext> DeferredContext;
-		ComPtr<ID3D11DeviceContext> CurrentContext;
 		ComPtr<IDXGISwapChain1> SwapChain;
 		DXGI_SWAP_CHAIN_DESC1 SwapChainDesc;
 		ComPtr<ID2D1DeviceContext> D2DDeviceContext;
 
 		ComPtr<ID3D11RenderTargetView> RenderTargetView;
-
+		ComPtr<ID3D11DepthStencilView> DepthStencilView;
+		ComPtr<ID3D11DepthStencilState> DepthStencilState;
 		ComPtr<ID3D11InputLayout> VertexLayout;
 		ComPtr<ID3D11VertexShader> VertexShader;
 		ComPtr<ID3D11PixelShader> PixelShader;
 		ComPtr<ID3D11ShaderReflection> Reflector;
+		ComPtr<ID3D11ShaderResourceView> ResourceView;
 
 		ComPtr<ID3D11Buffer> VertexBuffer;
 		ComPtr<ID3D11Buffer> IndexBuffer;
 		ComPtr<ID3D11Buffer> ConstantBuffer;
-		ComPtr<ID3D11Resource> resource;
-		ComPtr<ID3D11ShaderResourceView> resourceView;
 		ComPtr<ID3D11SamplerState> SamplerState;
 
 		BOOL TearingSupport = false;
+		D3D11_FEATURE_DATA_THREADING ThreadingSupport;
 		bool Running = false;
 		bool Tearing = false;
 
@@ -775,11 +1071,18 @@ namespace MyGame {
 		LARGE_INTEGER time;
 		LARGE_INTEGER freq;
 		String fpsString;
-		XMMATRIX world = XMMatrixIdentity();
-		XMMATRIX view = XMMatrixIdentity();
-		XMMATRIX projection = XMMatrixIdentity();
-		XMFLOAT3 eye;
-		XMFLOAT3 focus;
-		XMFLOAT3 up;
+		Matrix world;
+		Matrix view;
+		Matrix projection;
+		Vector3 eye;
+		Vector3 focus_target;
+		Vector3 up;
+		float nearZ = 5.0f; 
+		float farZ = 10000.0f;
+		POINTS point;
+		FbxScene* fbxScene;
+		FbxManager* fbxSdkManager;
+		vector<SimpleVertex> vertices;
+		vector<int> indices;
 	};
 }

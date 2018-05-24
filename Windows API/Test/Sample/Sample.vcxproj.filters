@@ -22,6 +22,9 @@
     <Filter Include="標頭檔\Include">
       <UniqueIdentifier>{3eafd783-a2c1-4982-a916-2b6bf06965d9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resource">
+      <UniqueIdentifier>{eb19e778-e43a-47c1-a139-ef51c8f2722e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Sample.rc">
@@ -51,9 +54,6 @@
     <FxCompile Include="Shader\VertexShader.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
-    <FxCompile Include="Shader\Sample.fx">
-      <Filter>Shader</Filter>
-    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DirectXTK\Src\WICTextureLoader.cpp">
@@ -62,11 +62,17 @@
     <ClCompile Include="DirectXTK\Src\DDSTextureLoader.cpp">
       <Filter>DirectXTK</Filter>
     </ClCompile>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>標頭檔</Filter>
+    </ClCompile>
     <ClCompile Include="Sample.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
-    <ClCompile Include="stdafx.cpp">
-      <Filter>來源檔案</Filter>
+    <ClCompile Include="DirectXTK\Src\CommonStates.cpp">
+      <Filter>DirectXTK</Filter>
+    </ClCompile>
+    <ClCompile Include="DirectXTK\Src\BinaryReader.cpp">
+      <Filter>DirectXTK</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
