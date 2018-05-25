@@ -120,9 +120,9 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="DirectXTK\Src\BinaryReader.cpp" />
     <ClCompile Include="DirectXTK\Src\CommonStates.cpp" />
     <ClCompile Include="DirectXTK\Src\DDSTextureLoader.cpp" />
+    <ClCompile Include="DirectXTK\Src\SimpleMath.cpp" />
     <ClCompile Include="DirectXTK\Src\WICTextureLoader.cpp" />
     <ClCompile Include="Sample.cpp" />
     <ClCompile Include="stdafx.cpp" />
@@ -133,6 +133,7 @@
     <ClInclude Include="Include\DirectXEnvironment.h" />
     <ClInclude Include="Include\Exception.h" />
     <ClInclude Include="Include\Registry.h" />
+    <ClInclude Include="Include\Scene.h" />
     <ClInclude Include="Include\Shader.h" />
     <ClInclude Include="Include\SimpleVertex.h" />
     <ClInclude Include="Include\String.h" />

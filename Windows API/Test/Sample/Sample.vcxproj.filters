@@ -71,7 +71,7 @@
     <ClCompile Include="DirectXTK\Src\CommonStates.cpp">
       <Filter>DirectXTK</Filter>
     </ClCompile>
-    <ClCompile Include="DirectXTK\Src\BinaryReader.cpp">
+    <ClCompile Include="DirectXTK\Src\SimpleMath.cpp">
       <Filter>DirectXTK</Filter>
     </ClCompile>
   </ItemGroup>
@@ -110,6 +110,9 @@
       <Filter>標頭檔</Filter>
     </ClInclude>
     <ClInclude Include="Include\Registry.h">
+      <Filter>標頭檔\Include</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\Scene.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
   </ItemGroup>

@@ -3,6 +3,7 @@
 #include "DeviceInfo.h"
 #include "SimpleVertex.h"
 #include "Shader.h"
+#include "Scene.h"
 
 #include <wbemidl.h>
 #include <comutil.h>
@@ -420,54 +421,10 @@ namespace MyGame {
 			float w = abs((float)rect.right - (float)rect.left);
 			float h = abs((float)rect.bottom - (float)rect.top);
 
-			// Hierarchy
-			// http://help.autodesk.com/view/FBX/2018/ENU/?guid=FBX_Developer_Help_importing_and_exporting_a_scene_importing_a_scene_html
-			if (FbxNode* fbxRootNode = fbxScene->GetRootNode()) {
-				for (int i = 0; i < fbxRootNode->GetChildCount(); i++) {
-					FbxNode* fbxChildNode = fbxRootNode->GetChild(i);
-					if (fbxChildNode->GetNodeAttribute() == NULL) continue;
-					const char* name = fbxChildNode->GetName();
-					if (strcmp(name, "film_camera") == 0) {
-						fbxChildNode = fbxChildNode->GetChild(0);
-						name = fbxChildNode->GetName();
-						for (int k = 0; k < fbxChildNode->GetChildCount(); k++) {
-							
-							FbxNode* child = fbxChildNode->GetChild(k);
-							if (child->GetNodeAttribute() == NULL) continue;
-							name = child->GetName();
-							FbxNodeAttribute::EType AttributeType = child->GetNodeAttribute()->GetAttributeType();
-
-							if (AttributeType == FbxNodeAttribute::eMesh) {
-								FbxMesh* mesh = (FbxMesh*)child->GetNodeAttribute();
-								FbxVector4* fbxVertices = mesh->GetControlPoints();
-								int controlPointsCount = mesh->GetControlPointsCount();
-
-								for (int j = 0; j < controlPointsCount; j++) {
-									SimpleVertex v;
-									v.Position = XMFLOAT4(
-										(float)fbxVertices[j].mData[0],
-										(float)fbxVertices[j].mData[1],
-										(float)fbxVertices[j].mData[2],
-										1.0f);
-									vertices.push_back(v);
-								}
-
-								int cPolygonCount = mesh->GetPolygonCount();
-								for (int j = 0; j < cPolygonCount; j++) {
-									int iNumVertices = mesh->GetPolygonSize(j);
-
-									for (int k = 0; k < iNumVertices; k++) {
-										int iControlPointIndex = mesh->GetPolygonVertex(j, k);
-										indices.push_back(iControlPointIndex);
-									}
-								}
-							}
-						}
-						break;
-					}
-				}
+			myScence = new MyScene();
+			if (myScence->CreateBuffer(D3D11Device.Get(), fbxScene->GetRootNode())) {
+				OutputDebug(TEXT("Create Scence Success\n"));
 			}
-
 
 			// 模型資料
 			//SimpleVertex vertices[] =
@@ -482,31 +439,31 @@ namespace MyGame {
 			//	XMFLOAT4(w / 8.0f, -h / 8.0f, -200.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f),
 			//};
 
-			// 建立模型頂點緩衝區
-			D3D11_BUFFER_DESC bd;
-			ZeroMemory(&bd, sizeof(bd));
-			bd.Usage = D3D11_USAGE_DEFAULT;
-			bd.ByteWidth = vertices.size() * sizeof(SimpleVertex);
-			bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-			bd.CPUAccessFlags = 0;
-			D3D11_SUBRESOURCE_DATA srd;
-			ZeroMemory(&srd, sizeof(srd));
-			srd.pSysMem = vertices.data();
-			hr = D3D11Device->CreateBuffer(&bd, &srd, &VertexBuffer);
-			CHECKRETURN(hr, TEXT("Create VertexBuffer"));
+			//// 建立模型頂點緩衝區
+			//D3D11_BUFFER_DESC bd;
+			//ZeroMemory(&bd, sizeof(bd));
+			//bd.Usage = D3D11_USAGE_DEFAULT;
+			//bd.ByteWidth = vertices.size() * sizeof(SimpleVertex);
+			//bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+			//bd.CPUAccessFlags = 0;
+			//D3D11_SUBRESOURCE_DATA srd;
+			//ZeroMemory(&srd, sizeof(srd));
+			//srd.pSysMem = vertices.data();
+			//hr = D3D11Device->CreateBuffer(&bd, &srd, &VertexBuffer);
+			//CHECKRETURN(hr, TEXT("Create VertexBuffer"));
 
-			// 建立模型頂點索引緩衝區
-			D3D11_BUFFER_DESC indexDesc;
-			ZeroMemory(&indexDesc, sizeof(indexDesc));
-			indexDesc.ByteWidth = indices.size() * sizeof(int);
-			indexDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-			indexDesc.Usage = D3D11_USAGE_DEFAULT;
-			indexDesc.CPUAccessFlags = 0;
-			D3D11_SUBRESOURCE_DATA indexsrd;
-			ZeroMemory(&indexsrd, sizeof(indexsrd));
-			indexsrd.pSysMem = indices.data();
-			hr = D3D11Device->CreateBuffer(&indexDesc, &indexsrd, &IndexBuffer);
-			CHECKRETURN(hr, TEXT("Create IndexBuffer"));
+			//// 建立模型頂點索引緩衝區
+			//D3D11_BUFFER_DESC indexDesc;
+			//ZeroMemory(&indexDesc, sizeof(indexDesc));
+			//indexDesc.ByteWidth = indices.size() * sizeof(int);
+			//indexDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+			//indexDesc.Usage = D3D11_USAGE_DEFAULT;
+			//indexDesc.CPUAccessFlags = 0;
+			//D3D11_SUBRESOURCE_DATA indexsrd;
+			//ZeroMemory(&indexsrd, sizeof(indexsrd));
+			//indexsrd.pSysMem = indices.data();
+			//hr = D3D11Device->CreateBuffer(&indexDesc, &indexsrd, &IndexBuffer);
+			//CHECKRETURN(hr, TEXT("Create IndexBuffer"));
 
 			// 建立常量緩衝區
 			D3D11_BUFFER_DESC constDesc;
@@ -536,20 +493,11 @@ namespace MyGame {
 			// 使用右手坐標系
 			view = Matrix::CreateLookAt(eye, focus_target, up);
 
-
-
 			RECT rect;
 			GetClientRect(hWnd, &rect);
 			float width = ceilf(((float)rect.right - (float)rect.left) / 500.0f);
 			float height = ceilf(((float)rect.bottom - (float)rect.top) / 500.0f);
 			projection = XMMatrixPerspectiveRH(width, height, nearZ, farZ);
-
-			// 設置變換矩陣給著色器
-			Matrix transform = world * view * projection;
-			context->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
-
-			// 設定多邊形拓樸類型
-			context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 
 			// 把DepthStencilView綁定到Output-Merger
 			context->OMSetDepthStencilState(DepthStencilState.Get(), 1);
@@ -633,8 +581,11 @@ namespace MyGame {
 					{
 						int x = (SHORT)HIWORD(msg.wParam) / 120;
 						Matrix scale = Matrix::CreateScale(1.0f - 0.1f * x);
-						eye = Vector3::Transform(eye, scale);
-						view = Matrix::CreateLookAt(eye, focus_target, up);
+						Vector3 e = Vector3::Transform(eye, scale);
+						if (e.LengthSquared() > 512.0f) {
+							eye = e;
+							view = Matrix::CreateLookAt(eye, focus_target, up);
+						}
 					}
 					break;
 					case WM_LBUTTONDOWN:
@@ -677,7 +628,7 @@ namespace MyGame {
 		private:
 		void Render() {
 			
-			if (indices.size()) {
+			if (myScence) {
 				ImmediateContext->OMSetRenderTargets(1, RenderTargetView.GetAddressOf(), nullptr);
 				ImmediateContext->ClearDepthStencilView(DepthStencilView.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 				FLOAT color[4] = { 47 / 255.0f, 51 / 255.0f, 61 / 255.0f, 255 / 255.0f };
@@ -692,13 +643,39 @@ namespace MyGame {
 					ImmediateContext->PSSetShaderResources(0, 1, ResourceView.GetAddressOf());
 				}
 
-				ImmediateContext->DrawIndexed(indices.size(), 0, 0);
+				RenderScence(myScence, ImmediateContext.Get());
 
 				GetFPS();
 				Direct2DRneder();
 
 				// 把畫好的結果輸出到螢幕上！
 				SwapChain->Present(0, Tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
+			}
+		}
+
+		private:
+		void RenderScence(MyScene* scence, ID3D11DeviceContext* deviceContext) {
+			RenderNode(scence->Root, deviceContext, scence->Root->LocalTransfrom);
+		}
+
+		private:
+		void RenderNode(MyNode* node, ID3D11DeviceContext* deviceContext, Matrix local) {
+			if (node->Children.size()) {
+				for (size_t i = 0; i < node->Children.size(); i++) {
+
+					RenderNode(node->Children[i], deviceContext, node->LocalTransfrom * local);
+				}
+			} else if (node->Mesh) {
+				UINT stride = sizeof(SimpleVertex);
+				UINT offset = 0;
+
+				Matrix transform = node->LocalTransfrom * local * view * projection;
+				deviceContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
+				deviceContext->IASetVertexBuffers(0, 1, &node->Mesh->VertexBuffer, &stride, &offset);
+				deviceContext->IASetIndexBuffer(node->Mesh->IndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+				// 設定多邊形拓樸類型
+				deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+				deviceContext->DrawIndexed(node->Mesh->indexCount, 0, 0);
 			}
 		}
 
@@ -1009,6 +986,8 @@ namespace MyGame {
 			if (fbxSdkManager) {
 				fbxSdkManager->Destroy();
 			}
+			
+			if (myScence) delete myScence;
 			TextBrush.Reset();
 			InfoTextFormat.Reset();
 			FPSFormat.Reset();
@@ -1082,7 +1061,6 @@ namespace MyGame {
 		POINTS point;
 		FbxScene* fbxScene;
 		FbxManager* fbxSdkManager;
-		vector<SimpleVertex> vertices;
-		vector<int> indices;
+		MyScene* myScence;
 	};
 }
