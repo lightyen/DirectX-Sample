@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fbxsdk.h>
+
 // http://help.autodesk.com/view/FBX/2018/ENU/?guid=FBX_Developer_Help_importing_and_exporting_a_scene_importing_a_scene_html
 
 namespace MyGame {
@@ -36,13 +38,25 @@ namespace MyGame {
 		}
 	};
 
+	class MyCamera {
+	public:
+		Vector3 Position;
+		Vector3 Target;
+		Vector3 Up;
+		float NearPlane;
+		float FarPlane;
+		float FilmWidth;
+		float FilmHeight;
+	};
+
 	class MyScene {
 	public:
 		MyNode* Root;
-
+		MyCamera* Camera;
 	public:
 		MyScene() {
 			Root = nullptr;
+			Camera = nullptr;
 		}
 
 		bool CreateBuffer(ID3D11Device* device, FbxNode* root) {
@@ -70,6 +84,7 @@ namespace MyGame {
 
 		~MyScene() {
 			if (Root) delete Root;
+			if (Camera) delete Camera;
 		}
 
 	private:
@@ -156,7 +171,25 @@ namespace MyGame {
 						return false;
 					}
 
-				} else if (count > 0) {
+				} else if (AttributeType == FbxNodeAttribute::eLight) {
+
+				} else if (AttributeType == FbxNodeAttribute::eCamera) {
+					if (Camera == NULL) {
+						FbxCamera* camera = (FbxCamera*)node->GetNodeAttribute();
+						auto position = camera->EvaluatePosition();
+						auto target = camera->EvaluateLookAtPosition();
+						auto up = camera->UpVector.Get();
+						Camera = new MyCamera();
+						Camera->Position = Vector3(position[0], position[1], position[2]);
+						Camera->Target = Vector3(target[0], target[1], target[2]);
+						Camera->Up = Vector3(up[0], up[1], up[2]);
+						Camera->NearPlane = camera->GetNearPlane();
+						Camera->FarPlane = camera->GetFarPlane();
+						Camera->FilmWidth = camera->GetApertureWidth() * .1;
+						Camera->FilmHeight = camera->GetApertureHeight() * .1;
+					}
+
+				} else if (AttributeType == FbxNodeAttribute::eNull && count > 0) {
 					for (int i = 0; i < count; i++) {
 						FbxNode* child = node->GetChild(i);
 						if (CreateBuffer(device, child, n) == false) return false;

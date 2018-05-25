@@ -106,14 +106,19 @@
     <ClInclude Include="Include\DeviceInfo.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
-    <ClInclude Include="DirectX.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
     <ClInclude Include="Include\Registry.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
     <ClInclude Include="Include\Scene.h">
       <Filter>標頭檔\Include</Filter>
     </ClInclude>
+    <ClInclude Include="Include\DirectX.h">
+      <Filter>標頭檔\Include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resource\studio_objs.fbx">
+      <Filter>Resource</Filter>
+    </None>
   </ItemGroup>
 </Project>

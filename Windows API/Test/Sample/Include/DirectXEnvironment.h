@@ -1,14 +1,10 @@
 #pragma once
 
+#include <fbxsdk.h>
 #include "DeviceInfo.h"
 #include "SimpleVertex.h"
 #include "Shader.h"
 #include "Scene.h"
-
-#include <wbemidl.h>
-#include <comutil.h>
-#pragma comment(lib, "wbemuuid.lib")
-#pragma comment(lib, "comsuppw.lib")
 
 #define CHECKRETURN(a,b) if(CheckFailed(a,b)){return;}
 
@@ -485,19 +481,33 @@ namespace MyGame {
 			context->IASetIndexBuffer(IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 			context->VSSetConstantBuffers(0, 1, ConstantBuffer.GetAddressOf());
 
-			// 設定初始狀態
-			eye = Vector3(0.0f, 0.0f, -150.0f);
-			focus_target = Vector3(0.0f, 0.0f, 0.0f);
-			up = Vector3(0.0f, 1.0f, 0.0f);
+			
 
-			// 使用右手坐標系
-			view = Matrix::CreateLookAt(eye, focus_target, up);
+			if (myScence && myScence->Camera) {
+				eye = myScence->Camera->Position;
+				focus_target = myScence->Camera->Target;
+				up = myScence->Camera->Up;
+				view = Matrix::CreateLookAt(eye, focus_target, up);
+				projection = XMMatrixPerspectiveRH(
+					myScence->Camera->FilmWidth,
+					myScence->Camera->FilmHeight,
+					myScence->Camera->NearPlane,
+					myScence->Camera->FarPlane);
+			} else {
+				// 設定初始狀態
+				eye = Vector3(0.0f, 0.0f, -150.0f);
+				focus_target = Vector3(0.0f, 0.0f, 0.0f);
+				up = Vector3(0.0f, 1.0f, 0.0f);
 
-			RECT rect;
-			GetClientRect(hWnd, &rect);
-			float width = ceilf(((float)rect.right - (float)rect.left) / 500.0f);
-			float height = ceilf(((float)rect.bottom - (float)rect.top) / 500.0f);
-			projection = XMMatrixPerspectiveRH(width, height, nearZ, farZ);
+				// 使用右手坐標系
+				view = Matrix::CreateLookAt(eye, focus_target, up);
+
+				RECT rect;
+				GetClientRect(hWnd, &rect);
+				float width = ceilf(((float)rect.right - (float)rect.left) / 500.0f);
+				float height = ceilf(((float)rect.bottom - (float)rect.top) / 500.0f);
+				projection = XMMatrixPerspectiveRH(width, height, nearZ, farZ);
+			}
 
 			// 把DepthStencilView綁定到Output-Merger
 			context->OMSetDepthStencilState(DepthStencilState.Get(), 1);
@@ -601,7 +611,7 @@ namespace MyGame {
 							point = p;
 
 							Matrix rotate = Matrix::CreateFromYawPitchRoll(-offs.x * XM_PI / 180.0f / 3.0f, offs.y * XM_PI / 180.0f / 3.0f, 0.0f);
-							eye = Vector3::Transform(eye, rotate);
+							eye = Vector3::Transform(eye - focus_target, rotate) + focus_target;
 							view = Matrix::CreateLookAt(eye, focus_target, up);
 						}
 						break;
