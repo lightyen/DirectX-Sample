@@ -20,7 +20,7 @@ namespace MyGame {
 			FbxIOSettings* pIOsettings = FbxIOSettings::Create(fbxSdkManager, IOSROOT);
 			fbxSdkManager->SetIOSettings(pIOsettings);
 
-			if (fbxImportor->Initialize("./Resource/studio_objs.fbx", -1, fbxSdkManager->GetIOSettings())) {
+			if (fbxImportor->Initialize("./Resource/new_objects.fbx", -1, fbxSdkManager->GetIOSettings())) {
 				fbxScene = FbxScene::Create(fbxSdkManager, "");
 				if (fbxImportor->Import(fbxScene) == false) {
 					fbxScene->Destroy();
@@ -86,7 +86,7 @@ namespace MyGame {
 		}
 
 		private:
-		void Initialize(HWND hWnd) {
+		void Initialize() {
 			
 			if (!CreateSwapChain(hWnd)) return;
 
@@ -96,7 +96,6 @@ namespace MyGame {
 
 			LoadShader(ImmediateContext.Get());
 			SetupPipeline(ImmediateContext.Get());
-			SetViewport(ImmediateContext.Get());
 
 			//CommonStates states = CommonStates(D3D11Device.Get());
 			//auto cull = states.CullCounterClockwise();
@@ -191,13 +190,12 @@ namespace MyGame {
 				SwapChainDesc.SampleDesc.Count = 1;
 				SwapChainDesc.SampleDesc.Quality = 0;
 
-				SwapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+				SwapChainDesc.Scaling = DXGI_SCALING_NONE;
 				SwapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
 				SwapChainDesc.Width = rect.right - rect.left;
 				SwapChainDesc.Height = rect.bottom - rect.top;
 				SwapChainDesc.Stereo = false;
 				SwapChainDesc.Flags = TearingSupport ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
-				hWnd = hwnd;
 
 				hr = fac2->CreateSwapChainForHwnd(D3D11Device.Get(), hWnd, &SwapChainDesc, nullptr, nullptr, SwapChain.ReleaseAndGetAddressOf());
 				if (CheckFailed(hr, TEXT("Create SwapChain1"))) return FALSE;
@@ -354,6 +352,7 @@ namespace MyGame {
 				Viewport vp(0, 0, ceilf((float)rect.right - (float)rect.left), ceilf((float)rect.bottom - (float)rect.top));
 				// 設定Render好的場景要畫在backbuffer的哪個區域(通常是全部的backbuffer區域)
 				context->RSSetViewports(1, vp.Get11());
+				fpsLayoutRect = { 0, (FLOAT)rect.bottom - 30, 300, (FLOAT)rect.bottom };
 			}
 		}
 
@@ -417,8 +416,8 @@ namespace MyGame {
 			float w = abs((float)rect.right - (float)rect.left);
 			float h = abs((float)rect.bottom - (float)rect.top);
 
-			myScence = new MyScene();
-			if (myScence->CreateBuffer(D3D11Device.Get(), fbxScene->GetRootNode())) {
+			myScence = new MyScene(fbxSdkManager, fbxScene);
+			if (myScence->CreateBuffer(D3D11Device.Get())) {
 				OutputDebug(TEXT("Create Scence Success\n"));
 			}
 
@@ -546,8 +545,7 @@ namespace MyGame {
 
 				if (!(fpsString.IsNullOrEmpty())) {
 					LPCTSTR str = fpsString.c_str();
-					D2D1_RECT_F layoutRect = { 0, (FLOAT)SwapChainDesc.Height - 30, 300, (FLOAT)SwapChainDesc.Height };
-					D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), FPSFormat.Get(), layoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
+					D2DDeviceContext->DrawText(str, (UINT32)_tcslen(str), FPSFormat.Get(), fpsLayoutRect, TextBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
 				}
 				D2DDeviceContext->EndDraw();
 			}
@@ -665,26 +663,26 @@ namespace MyGame {
 
 		private:
 		void RenderScence(MyScene* scence, ID3D11DeviceContext* deviceContext) {
-			RenderNode(scence->Root, deviceContext, scence->Root->LocalTransfrom);
+			RenderNode(scence->Root, deviceContext);
 		}
 
 		private:
-		void RenderNode(MyNode* node, ID3D11DeviceContext* deviceContext, Matrix local) {
+		void RenderNode(MyNode* node, ID3D11DeviceContext* deviceContext) {
 			if (node->Children.size()) {
 				for (size_t i = 0; i < node->Children.size(); i++) {
 
-					RenderNode(node->Children[i], deviceContext, node->LocalTransfrom * local);
+					RenderNode(node->Children[i], deviceContext);
 				}
 			} else if (node->Mesh) {
 				UINT stride = sizeof(SimpleVertex);
 				UINT offset = 0;
 
-				Matrix transform = node->LocalTransfrom * local * view * projection;
+				Matrix transform = node->GlobalTransfrom * view * projection;
 				deviceContext->UpdateSubresource(ConstantBuffer.Get(), 0, NULL, &transform, 0, 0);
 				deviceContext->IASetVertexBuffers(0, 1, &node->Mesh->VertexBuffer, &stride, &offset);
 				deviceContext->IASetIndexBuffer(node->Mesh->IndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 				// 設定多邊形拓樸類型
-				deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+				deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				deviceContext->DrawIndexed(node->Mesh->indexCount, 0, 0);
 			}
 		}
@@ -693,7 +691,7 @@ namespace MyGame {
 		HANDLE StartGameLoop(HWND hWnd) {
 			if (Running == false) {
 				Running = true;
-				Initialize(hWnd);
+				this->hWnd = hWnd;
 				return CreateThread(NULL, 0, GameLoop, this, 0, NULL);
 			}
 			return NULL;
@@ -702,6 +700,10 @@ namespace MyGame {
 		private:
 		void Run() {
 			while (Running) {
+				if (!resized) {
+					SetViewport(ImmediateContext.Get());
+					resized = true;
+				}
 				HandleUserControl();
 				Render();
 			}
@@ -715,6 +717,7 @@ namespace MyGame {
 		private:
 		static DWORD WINAPI GameLoop(PVOID pParam) {
 			DirectXPanel* _this = (DirectXPanel*)pParam;
+			_this->Initialize();
 			_this->Run();
 			return 0;
 		}
@@ -916,6 +919,11 @@ namespace MyGame {
 			return Tearing;
 		}
 
+		public:
+		void resize() {
+			resized = false;
+		}
+
 		private:
 		ComPtr<IDXGIAdapter> FindAdapter() {
 			if (DXGIFactory.Get()) {
@@ -1052,9 +1060,9 @@ namespace MyGame {
 		ComPtr<IDWriteTextFormat> FPSFormat;
 		ComPtr<IDWriteTextFormat> InfoTextFormat;
 		ComPtr<ID2D1SolidColorBrush> TextBrush;
-
+		D2D1_RECT_F fpsLayoutRect;
 		ComPtr<IWICImagingFactory> WICImagingFactory;
-
+		bool resized = false;
 		unique_ptr<DeviceInfo> Info;
 		int fpsCounter = 0;
 		LARGE_INTEGER time;
